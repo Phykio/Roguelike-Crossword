@@ -1,0 +1,6 @@
+{
+  "name": "crossword-scripts",
+  "type": "module",
+  "scripts": { "seed": "node seed.js" },
+  "dependencies": { "dotenv": "^16.4.5", "pg": "^8.12.0" }
+}
