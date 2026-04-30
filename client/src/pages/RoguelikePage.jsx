@@ -372,7 +372,7 @@ export default function RoguelikePage() {
     <div className="min-h-screen bg-white text-black flex flex-col
                     items-center justify-center gap-8 p-6">
       <div className="text-center max-w-sm">
-        <div className="text-6xl mb-6">🏆</div>
+        <div className="text-6xl mb-6"></div>
         <h1 className="font-pixel text-black font-bold text-xl mb-4 leading-loose">
           You Won!
         </h1>
@@ -582,7 +582,7 @@ export default function RoguelikePage() {
                               p-10 text-center max-w-sm mx-4
                               shadow-[8px_8px_0px_rgba(0,0,0,1)]">
                 <div className="text-4xl mb-4">
-                  {(run?.level ?? 1) >= MAX_LEVEL ? '🏆' : '🎉'}
+                  {(run?.level ?? 1) >= MAX_LEVEL ? '' : ''}
                 </div>
                 <p className="font-pixel text-black font-bold text-sm mb-1">
                   Level {run?.level} Complete!
