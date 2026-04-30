@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { useGameStore, PERMANENT_COSTS, ACTIVE_COSTS, PERMANENT_LIMITS } from '../store/gameStore.js';
 
 // ── Permanent upgrade definitions ──────────────────────────────
-// atMax(permanents) → bool  — whether this upgrade is capped
-// progress(permanents) → string — shown in the button when not maxed
-
 const PERMANENTS = [
   {
     id:       'extra_time',
@@ -39,7 +36,6 @@ const PERMANENTS = [
 ];
 
 // ── Active upgrade definitions ─────────────────────────────────
-
 const ACTIVES = [
   {
     id:   'hint',
@@ -89,11 +85,10 @@ const ACTIVES = [
   },
 ];
 
-// ── Component ──────────────────────────────────────────────────
-
 export default function UpgradeShop({
   onClose,
-  onApplyPermanent,   // async (type: string) => void — calls API, updates store via setRun
+  onApplyPermanent,
+  onSyncCoins, // Sync helper from RoguelikePage
   onHint,
   onSkipWord,
   onRevealVowels,
@@ -112,11 +107,8 @@ export default function UpgradeShop({
   }
 
   // ── Permanent purchase ─────────────────────────────────────
-
   async function handlePermanent(upgrade) {
-    if (permLoading)               return;
-    if (coins < upgrade.cost)      return;
-    if (upgrade.atMax(permanents)) return;
+    if (permLoading || coins < upgrade.cost || upgrade.atMax(permanents)) return;
 
     setPermLoading(true);
     try {
@@ -131,24 +123,21 @@ export default function UpgradeShop({
   }
 
   // ── Active purchase ────────────────────────────────────────
-
-  function handleActive(upgrade) {
+  async function handleActive(upgrade) {
     if (coins < upgrade.cost) {
       showFeedback('Not enough coins.', false);
       return;
     }
 
+    // Logic for Reveal Vowels requirement
     if (upgrade.id === 'reveal_vowels') {
       if (!activeWord || activeWord.answer.length < 8) {
         showFeedback('Select a word with 8+ letters first.', false);
         return;
       }
-      buyActive(upgrade.id, upgrade.cost);
-      onRevealVowels?.(activeWord);
-      showFeedback(`${upgrade.label} used!`);
-      return;
     }
 
+    // Logic for Lexical Hints (Definition, Synonym, etc.)
     if (upgrade.metaKey) {
       if (!activeWord) {
         showFeedback('Select a clue first.', false);
@@ -159,19 +148,27 @@ export default function UpgradeShop({
         showFeedback(`No ${upgrade.label.toLowerCase()} available for this word.`, false);
         return;
       }
-      buyActive(upgrade.id, upgrade.cost);
-      onLexicalHint?.(upgrade.id, value, activeWord.answer);
-      onClose();
-      return;
     }
 
+    // 1. Deduct locally
     buyActive(upgrade.id, upgrade.cost);
-    if (upgrade.id === 'hint')      onHint?.();
-    if (upgrade.id === 'skip_word') onSkipWord?.();
+
+    // 2. Sync to Server so Permanent Shop stays updated
+    if (onSyncCoins) await onSyncCoins();
+
+    // 3. Trigger Effects
+    if (upgrade.id === 'reveal_vowels') onRevealVowels?.(activeWord);
+    else if (upgrade.metaKey) {
+      const value = activeWord.meta?.[upgrade.metaKey];
+      onLexicalHint?.(upgrade.id, value, activeWord.answer);
+      onClose(); // Close shop to show the hint
+      return;
+    } 
+    else if (upgrade.id === 'hint') onHint?.();
+    else if (upgrade.id === 'skip_word') onSkipWord?.();
+
     showFeedback(`${upgrade.label} used!`);
   }
-
-  // ── Render ─────────────────────────────────────────────────
 
   return (
     <div
@@ -191,15 +188,15 @@ export default function UpgradeShop({
           <h2 className="font-pixel text-black font-bold text-sm">Upgrade Shop</h2>
           <span className="text-black font-bold font-pixel text-xs">{coins}c</span>
         </div>
-        <p className="text-gray-600 text-xs mb-4">
+        <p className="text-gray-600 text-[10px] mb-4 font-pixel">
           {activeWord
-            ? `Active word: ${activeWord.number} ${activeWord.direction} — ${activeWord.clue}`
-            : 'Select a word in the grid to unlock lexical hints.'}
+            ? `Active: ${activeWord.number} ${activeWord.direction}`
+            : 'Select a word in the grid first.'}
         </p>
 
         {/* Feedback banner */}
         {feedback && (
-          <div className={`mb-4 px-3 py-2 rounded-lg text-xs font-pixel border-2
+          <div className={`mb-4 px-3 py-2 rounded-lg text-[10px] font-pixel border-2
             ${feedback.ok
               ? 'bg-black text-white border-black'
               : 'bg-gray-100 text-black border-black'}`}>
@@ -208,13 +205,9 @@ export default function UpgradeShop({
         )}
 
         {/* Permanent upgrades */}
-        <h3 className="font-pixel text-black font-bold text-xs mb-2 mt-2
-                       border-b-2 border-gray-200 pb-1">
+        <h3 className="font-pixel text-black font-bold text-xs mb-2 border-b-2 border-gray-100 pb-1">
           Permanent
         </h3>
-        <p className="text-gray-600 text-xs mb-3">
-          These persist for the rest of your run.
-        </p>
         <div className="grid grid-cols-1 gap-2 mb-5">
           {PERMANENTS.map(u => {
             const maxed     = u.atMax(permanents);
@@ -229,34 +222,30 @@ export default function UpgradeShop({
                 disabled={disabled}
                 className={`flex items-start gap-3 p-3 rounded-xl text-left border-2 transition-all
                   ${maxed
-                    ? 'border-gray-200 bg-gray-100 opacity-60 cursor-default'
+                    ? 'border-gray-200 bg-gray-50 opacity-60 cursor-default'
                     : canAfford && !permLoading
                     ? 'border-gray-300 bg-white hover:border-black hover:bg-yellow-50 cursor-pointer'
                     : 'border-gray-100 bg-white opacity-50 cursor-not-allowed'}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-xs font-bold ${maxed ? 'text-gray-500' : 'text-black'}`}>
+                    <span className={`text-[11px] font-bold ${maxed ? 'text-gray-400' : 'text-black'}`}>
                       {u.label}
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Progress / max indicator */}
                       {progress && (
-                        <span className="text-gray-400 text-xs font-pixel">
+                        <span className="text-gray-400 text-[9px] font-pixel">
                           {maxed ? 'MAX' : progress}
                         </span>
                       )}
-                      {!progress && maxed && (
-                        <span className="text-gray-400 text-xs font-pixel">OWNED</span>
-                      )}
                       {!maxed && (
-                        <span className="text-black font-bold text-xs font-pixel">
+                        <span className="text-black font-bold text-[10px] font-pixel">
                           {u.cost}c
                         </span>
                       )}
                     </div>
                   </div>
-                  <p className="text-gray-600 text-xs mt-0.5 leading-relaxed">{u.desc}</p>
+                  <p className="text-gray-500 text-[10px] mt-0.5 leading-relaxed">{u.desc}</p>
                 </div>
               </button>
             );
@@ -264,20 +253,14 @@ export default function UpgradeShop({
         </div>
 
         {/* Active upgrades */}
-        <h3 className="font-pixel text-black font-bold text-xs mb-2
-                       border-b-2 border-gray-200 pb-1">
+        <h3 className="font-pixel text-black font-bold text-xs mb-2 border-b-2 border-gray-100 pb-1">
           Active
         </h3>
-        <p className="text-gray-600 text-xs mb-3">
-          One-time use per purchase. Buy multiple times to stock up.
-        </p>
-        <div className="grid grid-cols-1 gap-2 mb-5">
+        <div className="grid grid-cols-1 gap-2">
           {ACTIVES.map(u => {
-            const canAfford  = coins >= u.cost;
-            const vowelLocked = u.id === 'reveal_vowels'
-              && (!activeWord || activeWord.answer.length < 8);
-            const lexLocked   = u.metaKey
-              && (!activeWord || !activeWord.meta?.[u.metaKey]);
+            const canAfford   = coins >= u.cost;
+            const vowelLocked = u.id === 'reveal_vowels' && (!activeWord || activeWord.answer.length < 8);
+            const lexLocked   = u.metaKey && (!activeWord || !activeWord.meta?.[u.metaKey]);
             const softLocked  = vowelLocked || lexLocked;
 
             return (
@@ -292,21 +275,12 @@ export default function UpgradeShop({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-black text-xs font-bold">{u.label}</span>
-                    <span className="text-black font-bold text-xs font-pixel ml-2 shrink-0">
+                    <span className="text-black text-[11px] font-bold">{u.label}</span>
+                    <span className="text-black font-bold text-[10px] font-pixel ml-2 shrink-0">
                       {u.cost}c
                     </span>
                   </div>
-                  <p className="text-gray-600 text-xs mt-0.5 leading-relaxed">{u.desc}</p>
-                  {softLocked && (
-                    <p className="text-gray-500 text-xs mt-1 font-medium">
-                      {vowelLocked
-                        ? 'Select a word with 8+ letters'
-                        : !activeWord
-                        ? 'Select a word in the grid first'
-                        : 'Not available for this word'}
-                    </p>
-                  )}
+                  <p className="text-gray-500 text-[10px] mt-0.5 leading-relaxed">{u.desc}</p>
                 </div>
               </button>
             );
@@ -315,7 +289,7 @@ export default function UpgradeShop({
 
         <button
           onClick={onClose}
-          className="mt-5 w-full py-3 bg-black hover:bg-gray-800 border-2 border-black
+          className="mt-6 w-full py-3 bg-black hover:bg-gray-800 border-2 border-black
                      text-white font-bold font-pixel text-xs rounded-xl transition-colors">
           Back to Puzzle
         </button>

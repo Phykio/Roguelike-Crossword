@@ -8,12 +8,11 @@ import HeartsDisplay from '../components/HeartsDisplay.jsx';
 import api from '../lib/api.js';
 import {
   getOrCreatePlayerId,
-  getUsedClueIds,
-  markCluesUsed,
   loadRunState,
   savePuzzleState,
   loadPuzzleState,
   clearPuzzleState,
+  markCluesUsed,
   unlockClassic,
 } from '../lib/player.js';
 
@@ -33,20 +32,34 @@ export default function RoguelikePage() {
     setTimer,
   } = useGameStore();
 
-  const [loading,        setLoading]        = useState(true);
-  const [error,          setError]          = useState(null);
-  const [revealedCells,  setRevealedCells]  = useState(new Set());
-  const [revealedVowels, setRevealedVowels] = useState(new Set());
-  const [showShop,       setShowShop]       = useState(false);
-  const [levelComplete,  setLevelComplete]  = useState(false);
-  const [gameover,       setGameover]       = useState(false);
-  const [victory,        setVictory]        = useState(false);
-  const [activeWord,     setActiveWord]     = useState(null);
-  const [lexicalHint,    setLexicalHint]    = useState(null);
-  const [userAnswers,    setUserAnswers]    = useState(null);
+  const [loading,         setLoading]        = useState(true);
+  const [error,           setError]          = useState(null);
+  const [revealedCells,   setRevealedCells]  = useState(new Set());
+  const [revealedVowels,  setRevealedVowels] = useState(new Set());
+  const [showShop,        setShowShop]       = useState(false);
+  const [levelComplete,   setLevelComplete]  = useState(false);
+  const [gameover,        setGameover]       = useState(false);
+  const [victory,         setVictory]        = useState(false);
+  const [activeWord,      setActiveWord]     = useState(null);
+  const [lexicalHint,     setLexicalHint]    = useState(null);
+  const [userAnswers,     setUserAnswers]    = useState(null);
 
   const scoredWordsRef   = useRef(new Set());
   const timerPausedRef   = useRef(false);
+
+  // ── Coin Sync Helper ──────────────────────────────────────────
+  // Pushes local store state to Postgres so the Permanent shop works
+  const syncCoinsToDB = async () => {
+    const latestRun = useGameStore.getState().run;
+    if (!latestRun?.id) return;
+    try {
+      await api.patch(`/api/run/${latestRun.id}/coins`, { 
+        coins: latestRun.coins 
+      });
+    } catch (err) {
+      console.error("Failed to sync coins to database:", err);
+    }
+  };
 
   // ── Persist puzzle state ───────────────────────────────────────
 
@@ -92,10 +105,10 @@ export default function RoguelikePage() {
       const savedPuzzle = loadPuzzleState();
       if (savedPuzzle?.puzzle?.size) {
         setPuzzle(savedPuzzle.puzzle);
-        if (savedPuzzle.userAnswers)    setUserAnswers(savedPuzzle.userAnswers);
-        if (savedPuzzle.revealedCells)  setRevealedCells(new Set(savedPuzzle.revealedCells));
-        if (savedPuzzle.revealedVowels) setRevealedVowels(new Set(savedPuzzle.revealedVowels));
-        if (savedPuzzle.scoredWords)    scoredWordsRef.current = new Set(savedPuzzle.scoredWords);
+        if (savedPuzzle.userAnswers)     setUserAnswers(savedPuzzle.userAnswers);
+        if (savedPuzzle.revealedCells)   setRevealedCells(new Set(savedPuzzle.revealedCells));
+        if (savedPuzzle.revealedVowels)  setRevealedVowels(new Set(savedPuzzle.revealedVowels));
+        if (savedPuzzle.scoredWords)     scoredWordsRef.current = new Set(savedPuzzle.scoredWords);
         if (typeof savedPuzzle.timerSeconds === 'number') setTimer(savedPuzzle.timerSeconds);
         setLoading(false);
       } else {
@@ -166,12 +179,18 @@ export default function RoguelikePage() {
 
   // ── Word solved ────────────────────────────────────────────────
 
-  const handleWordSolved = useCallback((word) => {
+  const handleWordSolved = useCallback(async (word) => {
     const key = `${word.number}-${word.direction}`;
     if (scoredWordsRef.current.has(key)) return;
     scoredWordsRef.current.add(key);
+    
+    // Update locally
     addScore(word.answer.length * 10);
     addCoins(word.answer.length * 2);
+
+    // Sync coins to server immediately so the shop stays updated
+    await syncCoinsToDB();
+
     if (permanents.bonusTimeOnLong && word.answer.length >= 8) addTime(30);
   }, [addScore, addCoins, addTime, permanents]);
 
@@ -221,12 +240,10 @@ export default function RoguelikePage() {
   }
 
   // ── Permanent upgrades (API-backed) ───────────────────────────
-  // Called by UpgradeShop. Makes the server call, then syncs the store
-  // via setRun (which re-derives permanents from the returned run row).
 
   async function handleApplyPermanent(type) {
     const { data } = await api.post(`/api/run/${run.id}/permanent`, { type });
-    setRun(data); // re-derives permanents + updates coins/hearts automatically
+    setRun(data); 
   }
 
   // ── Hints ──────────────────────────────────────────────────────
@@ -318,133 +335,13 @@ export default function RoguelikePage() {
     navigate('/');
   }
 
-  // ── Dev cheat ──────────────────────────────────────────────────
-
-  useEffect(() => {
-    function handleCheat(e) {
-      if (e.key === '\\' && puzzle && !levelComplete && !gameover && !loading) {
-        e.preventDefault();
-        puzzle.words.forEach(word => {
-          const key = `${word.number}-${word.direction}`;
-          if (!scoredWordsRef.current.has(key)) {
-            scoredWordsRef.current.add(key);
-            addScore(word.answer.length * 10);
-            addCoins(word.answer.length * 2);
-          }
-        });
-        handlePuzzleComplete();
-      }
-    }
-    window.addEventListener('keydown', handleCheat);
-    return () => window.removeEventListener('keydown', handleCheat);
-  }, [puzzle, levelComplete, gameover, loading]); // eslint-disable-line
-
-  // ── Victory screen ─────────────────────────────────────────────
-
-  if (victory) return (
-    <div className="min-h-screen bg-white text-black flex flex-col
-                    items-center justify-center gap-8 p-6">
-      <div className="text-center max-w-sm">
-        <div className="text-6xl mb-6"></div>
-        <h1 className="font-pixel text-black font-bold text-xl mb-4 leading-loose">
-          You Won!
-        </h1>
-        <p className="text-gray-600 text-xs mb-2 leading-relaxed">
-          You completed all {MAX_LEVEL} levels of Roguelike mode.
-        </p>
-        <p className="text-gray-500 text-xs mb-6 leading-relaxed">
-          Classic mode is now unlocked. A new challenge awaits.
-        </p>
-        <div className="bg-gray-50 border-2 border-black rounded-xl p-4 mb-8
-                        flex justify-around">
-          <div className="text-center">
-            <p className="font-pixel text-black font-bold text-lg">{run?.score ?? 0}</p>
-            <p className="text-gray-500 text-xs mt-1 font-pixel">pts</p>
-          </div>
-          <div className="w-px bg-gray-200" />
-          <div className="text-center">
-            <p className="font-pixel text-black font-bold text-lg">{MAX_LEVEL}</p>
-            <p className="text-gray-500 text-xs mt-1 font-pixel">levels</p>
-          </div>
-          <div className="w-px bg-gray-200" />
-          <div className="text-center">
-            <p className="font-pixel text-black font-bold text-lg">{run?.hearts ?? 0}</p>
-            <p className="text-gray-500 text-xs mt-1 font-pixel">hearts left</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => { resetRun(); navigate('/classic'); }}
-            className="px-8 py-3 bg-black text-white hover:bg-gray-800
-                       font-pixel text-xs rounded-xl transition-colors w-full">
-            Play Classic Mode →
-          </button>
-          <button
-            onClick={() => { resetRun(); navigate('/'); }}
-            className="px-8 py-3 bg-white text-black border-2 border-black
-                       hover:bg-gray-50 font-pixel text-xs rounded-xl transition-colors w-full">
-            Play Again
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="text-gray-400 hover:text-black text-xs transition-colors font-pixel underline">
-            Home
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Game over screen ───────────────────────────────────────────
-
-  if (gameover) return (
-    <div className="min-h-screen bg-white text-black flex flex-col
-                    items-center justify-center gap-6 p-6">
-      <div className="text-center">
-        <div className="text-5xl mb-4">💀</div>
-        <p className="font-pixel text-black font-bold text-xl mb-2">Game Over</p>
-        <p className="text-gray-600 text-xs mb-1">You ran out of hearts.</p>
-        <p className="text-gray-500 text-xs">
-          Final score: {run?.score ?? 0} pts · Level {run?.level ?? 1}
-        </p>
-      </div>
-      <div className="flex flex-col gap-3 w-full max-w-xs">
-        <button
-          onClick={() => { resetRun(); clearPuzzleState(); navigate('/'); }}
-          className="px-6 py-3 bg-black text-white hover:bg-gray-800
-                     font-pixel text-xs rounded-xl transition-colors w-full">
-          Try Again
-        </button>
-        <button
-          onClick={() => navigate('/')}
-          className="px-6 py-3 bg-white text-black border-2 border-black
-                     hover:bg-gray-50 text-xs font-pixel rounded-xl transition-colors w-full">
-          Home
-        </button>
-      </div>
-    </div>
-  );
-
-  if (error) return (
-    <div className="min-h-screen bg-white text-black flex flex-col
-                    items-center justify-center gap-4">
-      <p className="text-black font-pixel text-xs">{error}</p>
-      <button onClick={() => navigate('/')}
-        className="text-gray-600 text-xs underline hover:text-black">
-        Home
-      </button>
-    </div>
-  );
-
   // ── Main render ────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col
-                    items-center p-4 gap-4">
+    <div className="min-h-screen bg-white text-black flex flex-col items-center p-4 gap-4">
 
       {/* HUD */}
       <div className="flex items-center justify-between w-full max-w-2xl pt-2">
-
         <div className="flex-1 flex items-center justify-start gap-3">
           <button
             onClick={handleGoHome}
@@ -485,7 +382,6 @@ export default function RoguelikePage() {
           <button
             onClick={handleQuitRun}
             className="text-red-400 hover:text-red-600 font-pixel text-base transition-colors"
-            title="Reset run (progress will be lost)"
           >
             ↺
           </button>
@@ -494,11 +390,9 @@ export default function RoguelikePage() {
 
       <div className="w-full max-w-2xl border-t border-gray-200" />
 
-      {/* Puzzle */}
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="w-8 h-8 border-2 border-black border-t-transparent
-                          rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
           <p className="font-pixel text-black text-xs animate-pulse">Building puzzle…</p>
         </div>
       ) : puzzle ? (
@@ -519,36 +413,23 @@ export default function RoguelikePage() {
             <button
               onClick={handleHint}
               disabled={hintsRemaining <= 0}
-              className="px-4 py-2 bg-white text-black border border-black
-                         hover:bg-gray-100 disabled:opacity-40
-                         disabled:cursor-not-allowed text-xs font-pixel
-                         rounded-lg transition-colors">
-               Hint ({hintsRemaining})
+              className="px-4 py-2 bg-white text-black border border-black hover:bg-gray-100 disabled:opacity-40 text-xs font-pixel rounded-lg transition-colors"
+            >
+              Hint ({hintsRemaining})
             </button>
           </div>
 
           {levelComplete && (
-            <div className="fixed inset-0 bg-black/50 flex items-center
-                            justify-center z-40">
-              <div className="bg-white border-4 border-black rounded-2xl
-                              p-10 text-center max-w-sm mx-4
-                              shadow-[8px_8px_0px_rgba(0,0,0,1)]">
-                <div className="text-4xl mb-4">
-                  {(run?.level ?? 1) >= MAX_LEVEL ? '' : ''}
-                </div>
-                <p className="font-pixel text-black font-bold text-sm mb-1">
-                  Level {run?.level} Complete!
-                </p>
-                {(run?.level ?? 1) >= MAX_LEVEL && (
-                  <p className="text-gray-600 text-xs mb-3">You've reached the final level!</p>
-                )}
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+              <div className="bg-white border-4 border-black rounded-2xl p-10 text-center max-w-sm mx-4 shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+                <p className="font-pixel text-black font-bold text-sm mb-1">Level {run?.level} Complete!</p>
                 <p className="text-black font-pixel text-xs mb-6">
                   +{puzzle.words.reduce((s, w) => s + w.answer.length * 10, 0)} pts
                 </p>
                 <button
                   onClick={handleNextLevel}
-                  className="px-8 py-3 bg-black text-white hover:bg-gray-800
-                             font-pixel text-xs rounded-xl transition-colors w-full">
+                  className="px-8 py-3 bg-black text-white hover:bg-gray-800 font-pixel text-xs rounded-xl transition-colors w-full"
+                >
                   {(run?.level ?? 1) >= MAX_LEVEL ? 'Claim Victory →' : 'Next Level →'}
                 </button>
               </div>
@@ -557,11 +438,11 @@ export default function RoguelikePage() {
         </>
       ) : null}
 
-      {/* Shop */}
       {showShop && (
         <UpgradeShop
           onClose={() => setShowShop(false)}
           onApplyPermanent={handleApplyPermanent}
+          onSyncCoins={syncCoinsToDB}
           onHint={handleHint}
           onSkipWord={handleSkipWord}
           onRevealVowels={handleRevealVowels}
