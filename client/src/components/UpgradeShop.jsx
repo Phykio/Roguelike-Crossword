@@ -6,7 +6,7 @@ const PERMANENTS = [
   {
     id:       'extra_time',
     label:    '+30s Per Puzzle',
-    desc:     'Every future puzzle starts with 30 extra seconds. Max +5 minutes total.',
+    desc:     'Every future puzzle starts with 30 extra seconds. Max +10 minutes total.',
     cost:     PERMANENT_COSTS.extra_time,
     atMax:    p => (p.extraTime ?? 0) >= PERMANENT_LIMITS.extra_time,
     progress: p => {
@@ -14,7 +14,7 @@ const PERMANENTS = [
       const mins = Math.floor(secs / 60);
       const rem  = secs % 60;
       const cur  = mins > 0 ? `${mins}m${rem > 0 ? ` ${rem}s` : ''}` : `${secs}s`;
-      return `${cur} / 5m extra`;
+      return `${cur} / 10m extra`;
     },
   },
   {

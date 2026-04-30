@@ -8,9 +8,9 @@ import {
 } from '../lib/player.js';
 
 export const PERMANENT_COSTS = {
-  extra_time:      50,
-  extra_heart:     100,
-  bonus_time_long: 100,
+  extra_time:      30,
+  extra_heart:     60,
+  bonus_time_long: 50,
 };
 
 export const ACTIVE_COSTS = {
@@ -26,7 +26,7 @@ export const ACTIVE_COSTS = {
 // Limits — kept in sync with the server's PERMANENT_RULES
 export const PERMANENT_LIMITS = {
   extra_heart:     4,    // max extra hearts (1 base + 4 extra = 5 total)
-  extra_time:      300,  // max extra seconds (10 minutes)
+  extra_time:      600,  // max extra seconds (10 minutes)
   bonus_time_long: 1,    // one-time purchase
 };
 
