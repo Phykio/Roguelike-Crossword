@@ -62,8 +62,38 @@ router.post('/start', async (req, res, next) => {
       [playerId]
     );
     const { rows } = await pool.query(
-      `INSERT INTO runs (player_id, score, level, coins, status, hearts)
-       VALUES ($1, 0, 1, 0, 'active', 1)
+      `WITH latest AS (
+         SELECT
+           extra_hearts_count,
+           extra_time_seconds,
+           bonus_time_long_purchased
+         FROM runs
+         WHERE player_id = $1
+         ORDER BY id DESC
+         LIMIT 1
+       )
+       INSERT INTO runs (
+         player_id,
+         score,
+         level,
+         coins,
+         status,
+         hearts,
+         extra_hearts_count,
+         extra_time_seconds,
+         bonus_time_long_purchased
+       )
+       VALUES (
+         $1,
+         0,
+         1,
+         0,
+         'active',
+         1 + COALESCE((SELECT extra_hearts_count FROM latest), 0),
+         COALESCE((SELECT extra_hearts_count FROM latest), 0),
+         COALESCE((SELECT extra_time_seconds FROM latest), 0),
+         COALESCE((SELECT bonus_time_long_purchased FROM latest), false)
+       )
        RETURNING *`,
       [playerId]
     );

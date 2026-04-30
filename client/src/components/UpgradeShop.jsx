@@ -241,7 +241,7 @@ export default function UpgradeShop({
           Permanent
         </h3>
         <p className="text-gray-600 text-xs mb-3">
-          These persist for the rest of your run.
+          These persist permanently once purchased.
         </p>
         <div className="grid grid-cols-1 gap-2 mb-5">
           {PERMANENTS.map(u => {

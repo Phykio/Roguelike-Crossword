@@ -37,7 +37,6 @@ export function loadRunState() {
 
 export function clearRunState() {
   localStorage.removeItem(RUN_STATE_KEY);
-  localStorage.removeItem(GAME_STATE_KEY);
   localStorage.removeItem(PUZZLE_STATE_KEY);
 }
 

@@ -40,6 +40,15 @@ function derivePermanents(run) {
   };
 }
 
+function hasPermanentFields(run) {
+  if (!run) return false;
+  return (
+    Object.prototype.hasOwnProperty.call(run, 'extra_hearts_count')
+    || Object.prototype.hasOwnProperty.call(run, 'extra_time_seconds')
+    || Object.prototype.hasOwnProperty.call(run, 'bonus_time_long_purchased')
+  );
+}
+
 function getInitialState() {
   const g        = loadGameState();
   const savedRun = loadRunState();
@@ -66,7 +75,10 @@ export const useGameStore = create((set, get) => ({
 
   // ── Run ──────────────────────────────────────────────────────
   setRun(run) {
-    const permanents = derivePermanents(run);
+    const currentPermanents = get().permanents ?? {};
+    const permanents = hasPermanentFields(run)
+      ? derivePermanents(run)
+      : currentPermanents;
     set({ run, permanents });
     saveRunState(run);
     persist({ ...get(), permanents });
@@ -155,14 +167,17 @@ export const useGameStore = create((set, get) => ({
   // ── Full run reset ────────────────────────────────────────────
   resetRun() {
     clearRunState();
+    const saved = loadGameState();
+    const permanents = saved?.permanents ?? get().permanents ?? {};
+    const timerSeconds = DEFAULT_TIMER + (permanents?.extraTime ?? 0);
     const fresh = {
       run:            null,
       puzzle:         null,
-      permanents:     {},
+      permanents,
       hintsRemaining: 0,
-      timerSeconds:   DEFAULT_TIMER,
+      timerSeconds,
     };
-    saveGameState({ permanents: {}, hintsRemaining: 0, timerSeconds: DEFAULT_TIMER });
+    saveGameState({ permanents, hintsRemaining: 0, timerSeconds });
     set(fresh);
   },
 }));
