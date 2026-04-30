@@ -12,12 +12,6 @@ export const PERMANENT_COSTS = {
   bonus_time_long: 50,
 };
 
-export const PERMANENT_LIMITS = {
-  extra_time:      10, 
-  extra_heart:     4,  
-  bonus_time_long: 1,  
-};
-
 export const ACTIVE_COSTS = {
   hint:            10,
   skip_word:       40,
@@ -30,17 +24,21 @@ export const ACTIVE_COSTS = {
 
 const DEFAULT_TIMER = 300;
 
+// Load persisted client state on startup
 function getInitialState() {
   const g = loadGameState();
   return {
-    hintsRemaining: g?.hintsRemaining ?? 0,
+    permanents:     g?.permanents     ?? {},
+    hintsRemaining: g?.hintsRemaining ?? 0,   // no cap — infinite storage
     timerSeconds:   g?.timerSeconds   ?? DEFAULT_TIMER,
     upgrades:       g?.upgrades       ?? [],
   };
 }
 
 function persist(s) {
+  // Helper: save the current game state snapshot
   saveGameState({
+    permanents:     s.permanents,
     hintsRemaining: s.hintsRemaining,
     timerSeconds:   s.timerSeconds,
     upgrades:       s.upgrades,
@@ -52,10 +50,8 @@ export const useGameStore = create((set, get) => ({
   puzzle: null,
   ...getInitialState(),
 
+  // ── Run ────────────────────────────────────────────────────────
   setRun(run) {
-    if (run && !run.permanents) {
-      run.permanents = { extraTime: 0, extraTimeCount: 0, extraHearts: 0, bonusTimeOnLong: false };
-    }
     set({ run });
     saveRunState(run);
   },
@@ -95,25 +91,32 @@ export const useGameStore = create((set, get) => ({
     });
   },
 
+  // ── Timer ──────────────────────────────────────────────────────
+  // addTime(-1) is called every second by the timer component.
+  // We save to localStorage on every tick so a refresh resumes exactly.
   addTime(sec) {
     set(s => {
       const timerSeconds = Math.max(0, s.timerSeconds + sec);
-      persist({ ...s, timerSeconds });
+      const next = { ...s, timerSeconds };
+      persist(next);
       return { timerSeconds };
     });
   },
 
   setTimer(sec) {
     set(s => {
-      persist({ ...s, timerSeconds: sec });
+      const next = { ...s, timerSeconds: sec };
+      persist(next);
       return { timerSeconds: sec };
     });
   },
 
+  // ── Hints — no cap, infinite accumulation ─────────────────────
   addHints(n) {
     set(s => {
       const hintsRemaining = s.hintsRemaining + n;
-      persist({ ...s, hintsRemaining });
+      const next = { ...s, hintsRemaining };
+      persist(next);
       return { hintsRemaining };
     });
   },
@@ -121,79 +124,81 @@ export const useGameStore = create((set, get) => ({
   useHint() {
     set(s => {
       const hintsRemaining = Math.max(0, s.hintsRemaining - 1);
-      persist({ ...s, hintsRemaining });
+      const next = { ...s, hintsRemaining };
+      persist(next);
       return { hintsRemaining };
     });
   },
 
+  // ── Permanent upgrades ─────────────────────────────────────────
   applyPermanent(type) {
     set(s => {
-      if (!s.run) return {};
       const cost = PERMANENT_COSTS[type];
-      const p = s.run.permanents || { extraTime: 0, extraTimeCount: 0, extraHearts: 0, bonusTimeOnLong: false };
+      if ((s.run?.coins ?? 0) < cost) return {};
 
-      if (s.run.coins < cost) return {};
+      const permanents = { ...s.permanents };
+      if (type === 'extra_time')       permanents.extraTime       = (permanents.extraTime || 0) + 30;
+      if (type === 'extra_heart')      permanents.extraHearts     = (permanents.extraHearts || 0) + 1;
+      if (type === 'bonus_time_long')  permanents.bonusTimeOnLong = true;
 
-      if (type === 'extra_time' && (p.extraTimeCount >= PERMANENT_LIMITS.extra_time)) return {};
-      if (type === 'extra_heart' && (p.extraHearts >= PERMANENT_LIMITS.extra_heart)) return {};
-      if (type === 'bonus_time_long' && p.bonusTimeOnLong) return {};
-
-      const nextPermanents = { ...p };
-      
-      if (type === 'extra_time') {
-        nextPermanents.extraTime = (nextPermanents.extraTime || 0) + 30;
-        nextPermanents.extraTimeCount = (nextPermanents.extraTimeCount || 0) + 1;
-      }
-      if (type === 'extra_heart') {
-        nextPermanents.extraHearts = (nextPermanents.extraHearts || 0) + 1;
-      }
-      if (type === 'bonus_time_long') {
-        nextPermanents.bonusTimeOnLong = true;
-      }
-
-      const run = { 
-        ...s.run, 
-        coins: s.run.coins - cost,
-        permanents: nextPermanents 
-      };
-      
+      const run = { ...s.run, coins: (s.run?.coins ?? 0) - cost };
       saveRunState(run);
-      return { run };
+      const next = { ...s, permanents, run };
+      persist(next);
+      return { run, permanents };
     });
   },
 
+  // ── Active upgrades ────────────────────────────────────────────
   buyActive(type, cost) {
     set(s => {
       if ((s.run?.coins ?? 0) < cost) return {};
-      const run = { ...s.run, coins: s.run.coins - cost };
+
+      const run      = { ...s.run, coins: (s.run?.coins ?? 0) - cost };
       const upgrades = [...s.upgrades, type];
-      const hintsRemaining = type === 'hint' ? s.hintsRemaining + 1 : s.hintsRemaining;
+
+      // Buying hint adds 1 to the pool — no cap
+      const hintsRemaining = type === 'hint'
+        ? s.hintsRemaining + 1
+        : s.hintsRemaining;
 
       saveRunState(run);
-      persist({ ...s, run, upgrades, hintsRemaining });
+      const next = { ...s, run, upgrades, hintsRemaining };
+      persist(next);
       return { run, upgrades, hintsRemaining };
     });
   },
 
+  // ── Reset puzzle state (new puzzle, same run) ──────────────────
+  // Does NOT reset hints — they carry over between puzzles.
+  // Resets timer to base + permanent bonuses.
   resetPuzzleState() {
     set(s => {
-      const timerSeconds = DEFAULT_TIMER + (s.run?.permanents?.extraTime ?? 0);
-      const upgrades = [];
-      persist({ ...s, timerSeconds, upgrades });
+      const timerSeconds = DEFAULT_TIMER + (s.permanents?.extraTime ?? 0);
+      const upgrades     = [];
+      const next = { ...s, timerSeconds, upgrades };
+      persist(next);
       return { timerSeconds, upgrades };
     });
   },
 
+  // ── Full run reset ─────────────────────────────────────────────
   resetRun() {
     clearRunState();
     const fresh = {
       run:            null,
       puzzle:         null,
+      permanents:     {},
       upgrades:       [],
       hintsRemaining: 0,
       timerSeconds:   DEFAULT_TIMER,
     };
-    saveGameState(fresh);
+    saveGameState({
+      permanents:     {},
+      hintsRemaining: 0,
+      timerSeconds:   DEFAULT_TIMER,
+      upgrades:       [],
+    });
     set(fresh);
   },
 }));
