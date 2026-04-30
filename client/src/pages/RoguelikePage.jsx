@@ -149,18 +149,43 @@ export default function RoguelikePage() {
 
   // ── Timer ran out ──────────────────────────────────────────────
 
+  async function handleRunLost(nextRun = run) {
+    timerPausedRef.current = true;
+    clearPuzzleState();
+    try {
+      if (nextRun?.id) {
+        await api.patch(`/api/run/${nextRun.id}/end`, {
+          status: 'lost',
+          score: nextRun.score ?? 0,
+        });
+      }
+    } catch {
+      // If the server call fails, still clear local run state.
+    }
+    resetRun();
+    navigate('/');
+  }
+
   async function handleTimeUp() {
     timerPausedRef.current = true;
     clearPuzzleState();
     try {
       const { data } = await api.post(`/api/run/${run.id}/hearts`, { delta: -1 });
       setRun(data);
-      if (data.hearts <= 0 || data.status === 'lost') { setGameover(true); return; }
+      if (data.hearts <= 0 || data.status === 'lost') {
+        await handleRunLost(data);
+        return;
+      }
       await fetchPuzzle({ ...run, hearts: data.hearts });
     } catch {
       loseHeart();
-      const currentHearts = useGameStore.getState().run?.hearts ?? 0;
-      if (currentHearts <= 0) setGameover(true);
+      const currentRun = useGameStore.getState().run;
+      const currentHearts = currentRun?.hearts ?? 0;
+      if (currentHearts <= 0) {
+        await handleRunLost(currentRun);
+        return;
+      }
+      await fetchPuzzle(currentRun);
     }
   }
 

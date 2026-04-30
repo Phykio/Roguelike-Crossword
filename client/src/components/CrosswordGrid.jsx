@@ -24,6 +24,10 @@ function getSynonymList(synonym) {
   return synonym.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+function normalizeWordValue(value) {
+  return String(value ?? '').trim().toUpperCase();
+}
+
 function MetaBadge({ field }) {
   return (
     <span
@@ -220,6 +224,11 @@ export default function CrosswordGrid({
     return words.length > 0 && words.every(w => solvedWords.has(wordKey(w)));
   }
 
+  function isCellLocked(row, col) {
+    const key = `${row}-${col}`;
+    return revealedCells.has(key) || isCellInAnySolvedWord(row, col);
+  }
+
   const activeWord      = getActiveWord();
   const activeWordCells = getWordCells(activeWord);
   const activeKey       = activeWord ? wordKey(activeWord) : null;
@@ -281,12 +290,12 @@ export default function CrosswordGrid({
     if (e.key === 'Backspace') {
       e.preventDefault();
       const key = `${row}-${col}`;
-      if (isCurrentDirectionWordSolved(row, col) || revealedCells.has(key)) return;
+      if (isCellLocked(row, col)) return;
       if (userGrid[row][col] !== '') {
         setUserGrid(prev => prev.map((r, ri) => r.map((c, ci) => ri === row && ci === col ? '' : c)));
       } else {
         const prev = getPrevCell(row, col, direction);
-        if (prev && !isCurrentDirectionWordSolved(prev.row, prev.col) && !revealedCells.has(`${prev.row}-${prev.col}`)) {
+        if (prev && !isCellLocked(prev.row, prev.col)) {
           setUserGrid(g => g.map((r, ri) => r.map((c, ci) => ri === prev.row && ci === prev.col ? '' : c)));
           moveTo(prev);
         }
@@ -306,7 +315,9 @@ export default function CrosswordGrid({
         const cellKey = `${r}-${c}`;
         letters.push(revealedCells.has(cellKey) ? puzzle.grid[r][c] : (grid[r]?.[c] ?? ''));
       }
-      if (letters.join('') === word.answer) newlySolved.push(word);
+      if (normalizeWordValue(letters.join('')) === normalizeWordValue(word.answer)) {
+        newlySolved.push(word);
+      }
     }
     if (newlySolved.length > 0) {
       for (const w of newlySolved) solvedWordsRef.current.add(wordKey(w));
@@ -320,7 +331,7 @@ export default function CrosswordGrid({
 
   function handleChange(row, col, e) {
     const key = `${row}-${col}`;
-    if (isCurrentDirectionWordSolved(row, col) || revealedCells.has(key)) return;
+    if (isCellLocked(row, col)) return;
     const raw    = e.target.value.toUpperCase();
     const letter = raw.length > 1 ? raw.slice(-1) : raw;
     if (letter && !/^[A-Z]$/.test(letter)) return;
