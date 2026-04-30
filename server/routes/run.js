@@ -4,9 +4,9 @@ import pool from '../db.js';
 const router = express.Router();
 
 const PERMANENT_COSTS = {
-  extra_time:      30,
-  extra_heart:     100, // Updated to 100 as per your latest snippet
-  bonus_time_long: 50,
+  extra_time:      50,
+  extra_heart:     100, 
+  bonus_time_long: 100,
 };
 
 // Per-type rules: which DB column to check, cost, and ceiling
