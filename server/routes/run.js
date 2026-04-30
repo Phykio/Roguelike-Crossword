@@ -2,7 +2,7 @@ import pool from '../db.js';
  
 const PERMANENT_COSTS = {
   extra_time:      30,
-  extra_heart:     60,
+  extra_heart:     100,
   bonus_time_long: 50,
 };
  
@@ -42,7 +42,7 @@ const PERMANENT_RULES = {
 // Body: { type: 'extra_heart' | 'extra_time' | 'bonus_time_long' }
 // Returns: updated run row
 router.post('/:id/permanent', async (req, res) => {
-  const runId = parseInt(req.params.id, 10);
+  const runId = req.params.id;
   const { type } = req.body;
  
   const rule = PERMANENT_RULES[type];

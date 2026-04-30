@@ -6,29 +6,16 @@ import { getOrCreatePlayerId, getUsedClueIds } from '../lib/player.js';
 
 const SIZES = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15];
 
-function sizeLabel(s) {
-  if (s <= 3)  return ;
-  if (s <= 4)  return ;
-  if (s <= 5)  return ;
-  if (s <= 6) return ;
-  if (s <= 7)  return ;
-  if (s <= 8)  return ;
-  if (s <= 9)  return ;
-  if (s <= 11) return ;
-  if (s <= 13) return ;
-  return ;
-}
-
 export default function ClassicPage() {
   const navigate = useNavigate();
-  const [size,        setSize]       = useState(9);
-  const [puzzle,      setPuzzle]     = useState(null);
-  const [loading,     setLoading]    = useState(false);
-  const [error,       setError]      = useState(null);
-  const [started,     setStarted]    = useState(false);
+  const [size, setSize] = useState(9);
+  const [puzzle, setPuzzle] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [started, setStarted] = useState(false);
   const [solvedCount, setSolvedCount] = useState(0);
-  const [totalCount,  setTotalCount]  = useState(0);
-  const [complete,    setComplete]   = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [complete, setComplete] = useState(false);
 
   async function startGame() {
     setLoading(true);
@@ -40,16 +27,16 @@ export default function ClassicPage() {
     try {
       const { data } = await api.get('/api/puzzle', {
         params: {
-          level:    10,
+          level: 10,
           size,
           playerId: getOrCreatePlayerId(),
-          usedIds:  getUsedClueIds().join(','),
+          usedIds: getUsedClueIds().join(','),
         },
       });
       setPuzzle(data);
       setStarted(true);
     } catch {
-      setError('Could not generate a puzzle. Is the server running?');
+      setError('Could not generate a puzzle. Server might not be running');
     } finally {
       setLoading(false);
     }
@@ -72,16 +59,20 @@ export default function ClassicPage() {
 
   // ── Config screen ─────────────────────────────────────────────
   if (!started) return (
-    <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center gap-8 p-6">
-      <button
-        onClick={() => navigate('/')}
-        className="self-start text-gray-500 hover:text-black text-xs transition-colors font-pixel">
-        &#8592; Home
-      </button>
+    <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center p-6 relative">
+      {/* Top Left Navigation */}
+      <nav className="absolute top-8 left-8">
+        <button
+          onClick={() => navigate('/')}
+          className="text-gray-400 hover:text-black text-xs transition-colors font-pixel flex items-center gap-1"
+        >
+          <span>←</span> Home
+        </button>
+      </nav>
 
-      <div className="text-center">
-        <h1 className="font-pixel text-black font-bold text-xl mb-2">Classic</h1>
-        <p className="text-gray-600 text-xs">No hints. No help. Choose your challenge.</p>
+      <div className="text-center mb-8">
+        <h1 className="font-pixel text-black font-bold text-3xl mb-2">Classic</h1>
+        <p className="text-gray-500 text-xs font-pixel">No hints. No help. Choose your challenge.</p>
       </div>
 
       <div className="flex flex-col gap-5 w-full max-w-sm">
@@ -92,34 +83,31 @@ export default function ClassicPage() {
               <button
                 key={s}
                 onClick={() => setSize(s)}
-                className={`px-3 py-2 rounded text-xs font-pixel transition-colors
+                className={`px-3 py-2 rounded text-xs font-pixel transition-all
                   ${size === s
                     ? 'bg-black text-white'
-                    : 'bg-white text-black border border-gray-300 hover:bg-gray-100'}`}>
+                    : 'bg-white text-black border border-gray-300 hover:bg-gray-100'}`}
+              >
                 {s}×{s}
               </button>
             ))}
           </div>
-          <p className="text-gray-500 text-xs mt-3">{sizeLabel(size)}</p>
         </div>
 
-        {error && <p className="text-black font-bold text-xs">{error}</p>}
+        {error && <p className="text-red-500 font-bold text-xs font-pixel">{error}</p>}
 
         <button
           onClick={startGame}
           disabled={loading}
-          className="mt-2 py-3 bg-black hover:bg-gray-800 text-white disabled:opacity-50
-                     font-pixel text-xs rounded-xl transition-colors">
+          className="mt-4 py-4 bg-black hover:bg-gray-800 text-white disabled:opacity-50
+                      font-pixel text-xs rounded-xl transition-all shadow-[4px_4px_0px_rgba(0,0,0,0.2)] active:translate-y-0.5 active:shadow-none"
+        >
           {loading ? 'Building…' : 'Start Puzzle'}
         </button>
 
         {loading && (
-          <p className="text-black text-xs font-pixel text-center animate-pulse">
-            {size >= 11
-              ? 'Large grids take 15–30 seconds…'
-              : size >= 8
-              ? 'Generating your puzzle…'
-              : 'Almost ready…'}
+          <p className="text-black text-[10px] font-pixel text-center animate-pulse mt-4">
+            {size >= 11 ? 'Large grids take 15–30 seconds…' : 'Generating your puzzle…'}
           </p>
         )}
       </div>
@@ -128,20 +116,32 @@ export default function ClassicPage() {
 
   // ── Game screen ───────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col items-center p-4 gap-6">
-      <div className="flex items-center gap-4 w-full max-w-2xl pt-4">
+    <div className="min-h-screen bg-white text-black flex flex-col items-center p-4 gap-6 relative">
+      {/* HUD / Header */}
+      <div className="flex items-center justify-between w-full max-w-2xl pt-4">
         <button
           onClick={handleReset}
-          className="text-gray-500 hover:text-black text-xs transition-colors font-pixel">
-          &#8592; New game
+          className="text-gray-400 hover:text-black text-xs transition-colors font-pixel flex items-center gap-1"
+        >
+          <span>←</span> New game
         </button>
-        <div className="flex-1 flex justify-center">
+
+        <div className="flex flex-col items-center">
           <span className="font-pixel text-black font-bold text-xs">{size}×{size}</span>
+          <div className="h-1 w-16 bg-gray-100 mt-1 rounded-full overflow-hidden">
+             <div 
+                className="h-full bg-black transition-all duration-500" 
+                style={{ width: `${(solvedCount / (totalCount || 1)) * 100}%` }}
+             />
+          </div>
         </div>
+
         <span className="text-gray-500 text-xs font-pixel">
           {solvedCount}/{totalCount || (puzzle?.words.length ?? 0)} solved
         </span>
       </div>
+
+      <div className="w-full max-w-2xl border-t border-gray-100" />
 
       {puzzle && (
         <CrosswordGrid
@@ -153,27 +153,30 @@ export default function ClassicPage() {
 
       {complete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
-          <div className="bg-white border-4 border-black rounded-2xl p-10 text-center">
-            <p className="font-pixel text-black font-bold text-sm mb-2">Puzzle Complete!</p>
-            <p className="text-gray-700 text-xs mb-6">
-              You solved all {puzzle.words.length} words.
-            </p>
-            <div className="flex gap-3 justify-center">
+          <div className="bg-white border-4 border-black rounded-2xl p-10 text-center shadow-[8px_8px_0px_rgba(0,0,0,1)] mx-4">
+            <div className="text-4xl mb-4">🏆</div>
+            <p className="font-pixel text-black font-bold text-lg mb-2">Puzzle Complete!</p>
+            <div className="flex flex-col gap-3 mt-6">
               <button
                 onClick={startGame}
-                className="px-6 py-2 bg-black text-white hover:bg-gray-800 font-pixel text-xs rounded-xl transition-colors">
+                className="px-6 py-3 bg-black text-white hover:bg-gray-800 font-pixel text-xs rounded-xl transition-colors"
+              >
                 New Puzzle
               </button>
-              <button
-                onClick={handleReset}
-                className="px-6 py-2 bg-white text-black border border-black hover:bg-gray-100 text-xs rounded-xl transition-colors">
-                Change Size
-              </button>
-              <button
-                onClick={() => navigate('/')}
-                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-black text-xs rounded-xl transition-colors">
-                Home
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  className="flex-1 px-4 py-2 bg-white text-black border-2 border-black hover:bg-gray-100 text-xs rounded-xl font-pixel transition-colors"
+                >
+                  Size
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-black text-xs rounded-xl font-pixel transition-colors"
+                >
+                  Home
+                </button>
+              </div>
             </div>
           </div>
         </div>

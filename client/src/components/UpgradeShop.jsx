@@ -123,6 +123,7 @@ export default function UpgradeShop({
       await onApplyPermanent(upgrade.id);
       showFeedback(`${upgrade.label} activated!`);
     } catch (err) {
+      console.error("Upgrade Error:", err);
       showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
     } finally {
       setPermLoading(false);
