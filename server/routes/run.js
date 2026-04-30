@@ -1,11 +1,14 @@
+import express from 'express';
 import pool from '../db.js';
- 
+
+const router = express.Router();
+
 const PERMANENT_COSTS = {
   extra_time:      30,
-  extra_heart:     100,
+  extra_heart:     100, // Updated to 100 as per your latest snippet
   bonus_time_long: 50,
 };
- 
+
 // Per-type rules: which DB column to check, cost, and ceiling
 const PERMANENT_RULES = {
   extra_heart: {
@@ -37,59 +40,64 @@ const PERMANENT_RULES = {
     limitMsg: 'Already purchased.',
   },
 };
- 
+
 // POST /api/run/:id/permanent
 // Body: { type: 'extra_heart' | 'extra_time' | 'bonus_time_long' }
 // Returns: updated run row
 router.post('/:id/permanent', async (req, res) => {
+  // FIXED: No parseInt here. UUIDs must remain strings to match the DB.
   const runId = req.params.id;
   const { type } = req.body;
- 
+
   const rule = PERMANENT_RULES[type];
   if (!rule) return res.status(400).json({ error: 'Unknown upgrade type.' });
- 
+
   try {
     // Fetch current run
     const { rows } = await pool.query(
       `SELECT * FROM runs WHERE id = $1`,
       [runId]
     );
+    
     const run = rows[0];
     if (!run)                   return res.status(404).json({ error: 'Run not found.' });
     if (run.status !== 'active') return res.status(400).json({ error: 'Run is not active.' });
- 
+
     // Check coins
     if (run.coins < rule.cost) {
       return res.status(400).json({ error: 'Not enough coins.' });
     }
- 
+
     // Check limit — boolean columns are stored as true/false, coerce to 0/1 for comparison
     const currentValue = typeof run[rule.column] === 'boolean'
       ? (run[rule.column] ? 1 : 0)
       : (run[rule.column] ?? 0);
- 
+
     if (currentValue >= rule.max) {
       return res.status(400).json({ error: rule.limitMsg });
     }
- 
+
     // Build the SET clause dynamically from the rule's apply() diff
     const updates = {
       coins: run.coins - rule.cost,
       ...rule.apply(run),
     };
- 
+
     const keys    = Object.keys(updates);
     const values  = Object.values(updates);
     const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ');
- 
+
     const { rows: updated } = await pool.query(
       `UPDATE runs SET ${setClauses} WHERE id = $1 RETURNING *`,
       [runId, ...values]
     );
- 
+
     res.json(updated[0]);
   } catch (err) {
     console.error('[permanent upgrade]', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
+
+// FIXED: Added the default export so index.js can import 'runRoutes'
+export default router;

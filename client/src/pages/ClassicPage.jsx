@@ -60,8 +60,9 @@ export default function ClassicPage() {
   // ── Config screen ─────────────────────────────────────────────
   if (!started) return (
     <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center p-6 relative">
-      {/* Top Left Navigation */}
-      <nav className="absolute top-8 left-8">
+      
+      {/* FIXED TOP LEFT NAVIGATION - CONFIG */}
+      <nav className="absolute top-4 left-4 md:top-8 md:left-8">
         <button
           onClick={() => navigate('/')}
           className="text-gray-400 hover:text-black text-xs transition-colors font-pixel flex items-center gap-1"
@@ -85,7 +86,7 @@ export default function ClassicPage() {
                 onClick={() => setSize(s)}
                 className={`px-3 py-2 rounded text-xs font-pixel transition-all
                   ${size === s
-                    ? 'bg-black text-white'
+                    ? 'bg-black text-white border border-black'
                     : 'bg-white text-black border border-gray-300 hover:bg-gray-100'}`}
               >
                 {s}×{s}
@@ -116,19 +117,23 @@ export default function ClassicPage() {
 
   // ── Game screen ───────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col items-center p-4 gap-6 relative">
-      {/* HUD / Header */}
-      <div className="flex items-center justify-between w-full max-w-2xl pt-4">
+    <div className="min-h-screen bg-white text-black flex flex-col items-center p-4 pt-16 gap-6 relative">
+      
+      {/* FIXED TOP LEFT NAVIGATION - IN GAME */}
+      <nav className="absolute top-4 left-4 md:top-8 md:left-8">
         <button
           onClick={handleReset}
           className="text-gray-400 hover:text-black text-xs transition-colors font-pixel flex items-center gap-1"
         >
           <span>←</span> New game
         </button>
+      </nav>
 
-        <div className="flex flex-col items-center">
+      {/* HUD / Progress Bar Area */}
+      <div className="flex items-center justify-between w-full max-w-2xl px-2">
+        <div className="flex flex-col items-center flex-1">
           <span className="font-pixel text-black font-bold text-xs">{size}×{size}</span>
-          <div className="h-1 w-16 bg-gray-100 mt-1 rounded-full overflow-hidden">
+          <div className="h-1 w-24 bg-gray-100 mt-1 rounded-full overflow-hidden">
              <div 
                 className="h-full bg-black transition-all duration-500" 
                 style={{ width: `${(solvedCount / (totalCount || 1)) * 100}%` }}
@@ -136,7 +141,7 @@ export default function ClassicPage() {
           </div>
         </div>
 
-        <span className="text-gray-500 text-xs font-pixel">
+        <span className="text-gray-500 text-[10px] font-pixel">
           {solvedCount}/{totalCount || (puzzle?.words.length ?? 0)} solved
         </span>
       </div>
