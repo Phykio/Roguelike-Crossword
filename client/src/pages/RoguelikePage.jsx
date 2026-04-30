@@ -570,7 +570,7 @@ export default function RoguelikePage() {
                          hover:bg-gray-100 disabled:opacity-40
                          disabled:cursor-not-allowed text-xs font-pixel
                          rounded-lg transition-colors">
-              💡 Hint ({hintsRemaining})
+               Hint ({hintsRemaining})
             </button>
           </div>
 

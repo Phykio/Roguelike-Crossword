@@ -1,9 +1,5 @@
 import pool from '../db.js';
 
-// ═══════════════════════════════════════════════════════════════
-// PHASE 2 — PackedTrie
-// ═══════════════════════════════════════════════════════════════
-
 const NODE_SIZE   = 27;
 const END_FLAG    = 26;
 const INITIAL_CAP = 1_000_000;
@@ -99,7 +95,6 @@ class PackedTrie {
   }
 }
 
-// ─── Trie cache ───────────────────────────────────────────────
 let _trieCache     = null;
 let _trieCacheTime = 0;
 const TRIE_TTL_MS  = 30 * 60 * 1000;
@@ -108,11 +103,9 @@ async function getTrie() {
   const now = Date.now();
   if (_trieCache && now - _trieCacheTime < TRIE_TTL_MS) return _trieCache;
 
-  const start = Date.now();
-
   const { rows } = await pool.query(
     `SELECT answer FROM words
-     WHERE word_length BETWEEN 3 AND 15
+     WHERE length(answer) BETWEEN 3 AND 15
      ORDER BY answer`
   );
 
@@ -123,10 +116,6 @@ async function getTrie() {
   _trieCacheTime = now;
   return trie;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// PHASE 1 — American-style mask generation
-// ═══════════════════════════════════════════════════════════════
 
 const MIN_WORD = 3;
 
@@ -154,7 +143,6 @@ function isValidMask(mask, size) {
   for (let c = 0; c < size; c++)
     if (colHasShortRun(mask, c, size)) return false;
 
-  // BFS connectivity — all white cells must be reachable from one another
   let startR = -1, startC = -1, whites = 0;
   for (let r = 0; r < size; r++)
     for (let c = 0; c < size; c++)
@@ -182,26 +170,6 @@ function isValidMask(mask, size) {
   return found === whites;
 }
 
-function countWords(mask, size) {
-  let count = 0;
-  for (let r = 0; r < size; r++) {
-    let run = 0;
-    for (let c = 0; c <= size; c++) {
-      if (c < size && mask[r][c]) { run++; }
-      else { if (run >= MIN_WORD) count++; run = 0; }
-    }
-  }
-  for (let c = 0; c < size; c++) {
-    let run = 0;
-    for (let r = 0; r <= size; r++) {
-      if (r < size && mask[r][c]) { run++; }
-      else { if (run >= MIN_WORD) count++; run = 0; }
-    }
-  }
-  return count;
-}
-
-// ─── Black-cell targets by grid size ─────────────────────────
 function getBlackTarget(size) {
   if (size <= 5) return { min: 0, max: 0 };
   const total = size * size;
@@ -266,18 +234,11 @@ function generateAmericanMask(size) {
       }
     }
 
-    if (placed >= minB) {
-      const pct = ((placed / (size * size)) * 100).toFixed(0);
-      return mask;
-    }
+    if (placed >= minB) return mask;
   }
 
   return Array.from({ length: size }, () => Array(size).fill(true));
 }
-
-// ═══════════════════════════════════════════════════════════════
-// Slot and intersection helpers
-// ═══════════════════════════════════════════════════════════════
 
 function findSlots(size, mask) {
   const slots = [];
@@ -337,10 +298,6 @@ function buildIntersections(slots) {
   }
   return ix;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// PHASE 3 — CSP Solver with wall-clock timeout
-// ═══════════════════════════════════════════════════════════════
 
 function getTotalBudget(size) {
   if (size <= 5)  return  8_000;
@@ -480,19 +437,16 @@ function solve(slots, intersections, trie, size, timeLimitMs) {
   return { grid2d, assigned };
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PHASE 4 — Clue lookup + lexicon meta + numbering
-// ═══════════════════════════════════════════════════════════════
-
 async function fetchClues(answers, usedClueIds) {
   if (!answers.length) return new Map();
 
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (answer) answer, id, clue
-     FROM clues
-     WHERE answer = ANY($1::text[])
-       AND id != ALL($2::int[])
-     ORDER BY answer, RANDOM()`,
+    `SELECT DISTINCT ON (w.answer) w.answer, c.id, c.clue
+     FROM clues c
+     JOIN words w ON w.id = c.word_id
+     WHERE w.answer = ANY($1::text[])
+       AND c.id != ALL($2::int[])
+     ORDER BY w.answer, RANDOM()`,
     [answers, usedClueIds.length ? usedClueIds : [0]]
   );
 
@@ -501,7 +455,6 @@ async function fetchClues(answers, usedClueIds) {
   return map;
 }
 
-// ─── NEW: fetch enrichment data from word_lexicon ─────────────
 async function fetchLexicon(answers) {
   if (!answers.length) return new Map();
 
@@ -514,12 +467,11 @@ async function fetchLexicon(answers) {
 
   const map = new Map();
   for (const row of rows) {
-    // Only store entries that have at least one non-null enrichment field
     if (row.part_of_speech || row.definition || row.synonym || row.example) {
       map.set(row.answer, {
         pos:        row.part_of_speech ?? null,
         definition: row.definition     ?? null,
-        synonym:    row.synonym        ?? null,   // comma-separated string from DB
+        synonym:    row.synonym        ?? null,
         example:    row.example        ?? null,
       });
     }
@@ -552,7 +504,6 @@ function numberSlots(slots, size) {
   return slotNum;
 }
 
-// ─── UPDATED: accepts lexiconMap and attaches meta ────────────
 function buildWordList(slots, assigned, clueMap, slotNum, lexiconMap) {
   const words = [];
   for (const [si, answer] of assigned.entries()) {
@@ -566,7 +517,6 @@ function buildWordList(slots, assigned, clueMap, slotNum, lexiconMap) {
       col:       slots[si].col,
       direction: slots[si].direction,
       number:    slotNum.get(si) ?? 0,
-      // null when the word has no lexicon entry
       meta:      lexiconMap.get(answer) ?? null,
     });
   }
@@ -574,11 +524,7 @@ function buildWordList(slots, assigned, clueMap, slotNum, lexiconMap) {
   return words;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PUBLIC API
-// ═══════════════════════════════════════════════════════════════
-
-export async function buildPuzzle(size, difficulty, usedClueIds = []) {
+export async function buildPuzzle(size, usedClueIds = []) {
   const trie        = await getTrie();
   const totalBudget = getTotalBudget(size);
   const sliceMs     = getAttemptSlice(size);
@@ -586,39 +532,27 @@ export async function buildPuzzle(size, difficulty, usedClueIds = []) {
 
   for (let attempt = 0; attempt < 8; attempt++) {
     const remaining = deadline - Date.now();
-    if (remaining <= 500) {
-      break;
-    }
+    if (remaining <= 500) break;
 
     const attemptBudget = Math.min(sliceMs, remaining);
-
     const mask          = generateAmericanMask(size);
     const slots         = findSlots(size, mask);
     const intersections = buildIntersections(slots);
 
     if (slots.length === 0) continue;
 
-    const slotLengths = slots.map(s => s.length).join(',');
-
-    const start   = Date.now();
-    const result  = solve(slots, intersections, trie, size, attemptBudget);
-    const elapsed = Date.now() - start;
-
-    if (!result) {
-      continue;
-    }
-
+    const result = solve(slots, intersections, trie, size, attemptBudget);
+    if (!result) continue;
 
     const answers = [...result.assigned.values()];
 
-    // Fetch clues and lexicon enrichment in parallel
     const [clueMap, lexiconMap] = await Promise.all([
       fetchClues(answers, usedClueIds),
       fetchLexicon(answers),
     ]);
 
-    const slotNum  = numberSlots(slots, size);
-    const words    = buildWordList(slots, result.assigned, clueMap, slotNum, lexiconMap);
+    const slotNum = numberSlots(slots, size);
+    const words   = buildWordList(slots, result.assigned, clueMap, slotNum, lexiconMap);
 
     const finalGrid = result.grid2d.map((row, ri) =>
       row.map((cell, ci) => mask[ri][ci] ? cell : null)
@@ -628,7 +562,7 @@ export async function buildPuzzle(size, difficulty, usedClueIds = []) {
   }
 
   throw new Error(
-    `Could not generate a ${size}×${size} puzzle after 8 attempts. ` +
+    `Could not generate a ${size}x${size} puzzle after 8 attempts. ` +
     `Try a smaller grid size.`
   );
 }

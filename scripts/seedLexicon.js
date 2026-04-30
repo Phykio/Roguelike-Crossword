@@ -3,7 +3,7 @@ import fs from 'fs';
 import { config } from 'dotenv';
 config({ path: '../.env' });
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL2, max: 3 });
 
 async function seedLexiconFromWordNet() {
     console.log("[1] Reading WordNet JSON...");
