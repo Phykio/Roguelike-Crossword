@@ -1,68 +1,95 @@
-import { Router } from 'express';
 import pool from '../db.js';
-import { UPGRADE_COSTS } from '../config/levelConfig.js';
  
-const router = Router();
+const PERMANENT_COSTS = {
+  extra_time:      30,
+  extra_heart:     60,
+  bonus_time_long: 50,
+};
  
-// POST /api/run/start
-router.post('/start', async (req, res, next) => {
+// Per-type rules: which DB column to check, cost, and ceiling
+const PERMANENT_RULES = {
+  extra_heart: {
+    cost:    PERMANENT_COSTS.extra_heart,
+    column:  'extra_hearts_count',
+    max:     4,            // 1 base heart + 4 extra = 5 total
+    apply:   (run) => ({
+      extra_hearts_count: run.extra_hearts_count + 1,
+      hearts:             run.hearts + 1,   // immediately give the heart
+    }),
+    limitMsg: 'Maximum 5 hearts reached.',
+  },
+  extra_time: {
+    cost:    PERMANENT_COSTS.extra_time,
+    column:  'extra_time_seconds',
+    max:     600,          // 10 minutes extra
+    apply:   (run) => ({
+      extra_time_seconds: run.extra_time_seconds + 30,
+    }),
+    limitMsg: 'Maximum +10 minutes of extra time reached.',
+  },
+  bonus_time_long: {
+    cost:    PERMANENT_COSTS.bonus_time_long,
+    column:  'bonus_time_long_purchased',
+    max:     1,            // boolean — 0 or 1
+    apply:   (_run) => ({
+      bonus_time_long_purchased: true,
+    }),
+    limitMsg: 'Already purchased.',
+  },
+};
+ 
+// POST /api/run/:id/permanent
+// Body: { type: 'extra_heart' | 'extra_time' | 'bonus_time_long' }
+// Returns: updated run row
+router.post('/:id/permanent', async (req, res) => {
+  const runId = parseInt(req.params.id, 10);
+  const { type } = req.body;
+ 
+  const rule = PERMANENT_RULES[type];
+  if (!rule) return res.status(400).json({ error: 'Unknown upgrade type.' });
+ 
   try {
-    const { playerId } = req.body;
-    if (!playerId) return res.status(400).json({ error: 'playerId required' });
-    await pool.query(
-      'INSERT INTO players (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
-      [playerId]
-    );
+    // Fetch current run
     const { rows } = await pool.query(
-      `INSERT INTO runs (player_id, score, level, coins, status, hearts)
-       VALUES ($1, 0, 1, 0, 'active', 1)
-       RETURNING *`,
-      [playerId]
+      `SELECT * FROM runs WHERE id = $1`,
+      [runId]
     );
-    res.json(rows[0]);
-  } catch (err) { next(err); }
-});
+    const run = rows[0];
+    if (!run)                   return res.status(404).json({ error: 'Run not found.' });
+    if (run.status !== 'active') return res.status(400).json({ error: 'Run is not active.' });
  
-// PATCH /api/run/:id/level-complete
-router.patch('/:id/level-complete', async (req, res, next) => {
-  try {
-    const { score, coins } = req.body;
-    const { rows } = await pool.query(
-      `UPDATE runs SET score=$1, coins=$2, level=level+1
-       WHERE id=$3 AND status='active' RETURNING *`,
-      [score, coins, parseInt(req.params.id)]
+    // Check coins
+    if (run.coins < rule.cost) {
+      return res.status(400).json({ error: 'Not enough coins.' });
+    }
+ 
+    // Check limit — boolean columns are stored as true/false, coerce to 0/1 for comparison
+    const currentValue = typeof run[rule.column] === 'boolean'
+      ? (run[rule.column] ? 1 : 0)
+      : (run[rule.column] ?? 0);
+ 
+    if (currentValue >= rule.max) {
+      return res.status(400).json({ error: rule.limitMsg });
+    }
+ 
+    // Build the SET clause dynamically from the rule's apply() diff
+    const updates = {
+      coins: run.coins - rule.cost,
+      ...rule.apply(run),
+    };
+ 
+    const keys    = Object.keys(updates);
+    const values  = Object.values(updates);
+    const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ');
+ 
+    const { rows: updated } = await pool.query(
+      `UPDATE runs SET ${setClauses} WHERE id = $1 RETURNING *`,
+      [runId, ...values]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Run not found' });
-    res.json(rows[0]);
-  } catch (err) { next(err); }
-});
  
-// PATCH /api/run/:id/end
-router.patch('/:id/end', async (req, res, next) => {
-  try {
-    const { status, score } = req.body;
-    if (!['won','lost'].includes(status))
-      return res.status(400).json({ error: "status must be 'won' or 'lost'" });
-    const { rows } = await pool.query(
-      'UPDATE runs SET status=$1, score=$2, ended_at=NOW() WHERE id=$3 RETURNING *',
-      [status, score, parseInt(req.params.id)]
-    );
-    res.json(rows[0]);
-  } catch (err) { next(err); }
+    res.json(updated[0]);
+  } catch (err) {
+    console.error('[permanent upgrade]', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
- 
-// POST /api/run/:id/upgrade
-router.post('/:id/upgrade', async (req, res, next) => {
-  try {
-    const { upgrade, currentCoins } = req.body;
-    const cost = UPGRADE_COSTS[upgrade];
-    if (cost === undefined) return res.status(400).json({ error: 'Unknown upgrade' });
-    if (currentCoins < cost) return res.status(400).json({ error: 'Not enough coins' });
-    const newCoins = currentCoins - cost;
-    await pool.query('UPDATE runs SET coins=$1 WHERE id=$2', [newCoins, parseInt(req.params.id)]);
-    await pool.query('INSERT INTO run_upgrades (run_id, upgrade) VALUES ($1,$2)', [parseInt(req.params.id), upgrade]);
-    res.json({ ok: true, newCoins });
-  } catch (err) { next(err); }
-});
- 
-export default router;

@@ -1,83 +1,88 @@
 import { useState } from 'react';
-import { useGameStore, PERMANENT_COSTS, ACTIVE_COSTS } from '../store/gameStore.js';
+import { useGameStore, PERMANENT_COSTS, ACTIVE_COSTS, PERMANENT_LIMITS } from '../store/gameStore.js';
 
-// ── Upgrade definitions ────────────────────────────────────────
+// ── Permanent upgrade definitions ──────────────────────────────
+// atMax(permanents) → bool  — whether this upgrade is capped
+// progress(permanents) → string — shown in the button when not maxed
 
 const PERMANENTS = [
   {
-    id:   'extra_time',
-    icon: '',
-    label: '+30s Per Puzzle',
-    desc:  'Every future puzzle starts with 30 extra seconds. This Effect Stacks.',
-    cost:  PERMANENT_COSTS.extra_time,
+    id:       'extra_time',
+    label:    '+30s Per Puzzle',
+    desc:     'Every future puzzle starts with 30 extra seconds. Max +10 minutes total.',
+    cost:     PERMANENT_COSTS.extra_time,
+    atMax:    p => (p.extraTime ?? 0) >= PERMANENT_LIMITS.extra_time,
+    progress: p => {
+      const secs = p.extraTime ?? 0;
+      const mins = Math.floor(secs / 60);
+      const rem  = secs % 60;
+      const cur  = mins > 0 ? `${mins}m${rem > 0 ? ` ${rem}s` : ''}` : `${secs}s`;
+      return `${cur} / 10m extra`;
+    },
   },
   {
-    id:   'extra_heart',
-    icon: '',
-    label: 'Extra Heart',
-    desc:  'Gain one additional life. You can have up to 5 hearts.',
-    cost:  PERMANENT_COSTS.extra_heart,
+    id:       'extra_heart',
+    label:    'Extra Heart',
+    desc:     'Gain one additional life. Maximum 5 hearts total.',
+    cost:     PERMANENT_COSTS.extra_heart,
+    atMax:    p => (p.extraHearts ?? 0) >= PERMANENT_LIMITS.extra_heart,
+    progress: p => `${1 + (p.extraHearts ?? 0)} / 5 hearts`,
   },
   {
-    id:   'bonus_time_long',
-    icon: '',
-    label: 'Long Word Bonus',
-    desc:  'Solving a word 8+ letters long adds 30s back to the clock.',
-    cost:  PERMANENT_COSTS.bonus_time_long,
-    oneTime: true,
+    id:       'bonus_time_long',
+    label:    'Long Word Bonus',
+    desc:     'Solving a word 8+ letters long adds 30s back to the clock.',
+    cost:     PERMANENT_COSTS.bonus_time_long,
+    atMax:    p => !!p.bonusTimeOnLong,
+    progress: () => '',
   },
 ];
+
+// ── Active upgrade definitions ─────────────────────────────────
 
 const ACTIVES = [
   {
     id:   'hint',
-    icon: '',
     label: 'Hint',
     desc:  'Reveals one letter of answer in the selected clue.',
     cost:  ACTIVE_COSTS.hint,
   },
   {
-    id:   'hint_pos',
-    icon: '',
-    label: 'Part of Speech',
-    desc:  'Shows whether the answer is a noun, verb, adjective, etc.',
-    cost:  ACTIVE_COSTS.hint_pos,
+    id:      'hint_pos',
+    label:   'Part of Speech',
+    desc:    'Shows whether the answer is a noun, verb, adjective, etc.',
+    cost:    ACTIVE_COSTS.hint_pos,
     metaKey: 'pos',
   },
   {
-    id:   'hint_synonym',
-    icon: '',
-    label: 'Synonym',
-    desc:  'Shows a synonym for the answer.',
-    cost:  ACTIVE_COSTS.hint_synonym,
+    id:      'hint_synonym',
+    label:   'Synonym',
+    desc:    'Shows a synonym for the answer.',
+    cost:    ACTIVE_COSTS.hint_synonym,
     metaKey: 'synonym',
   },
   {
-    id:   'hint_definition',
-    icon: '',
-    label: 'Definition',
-    desc:  'Shows the dictionary definition of the answer.',
-    cost:  ACTIVE_COSTS.hint_definition,
+    id:      'hint_definition',
+    label:   'Definition',
+    desc:    'Shows the dictionary definition of the answer.',
+    cost:    ACTIVE_COSTS.hint_definition,
     metaKey: 'definition',
   },
   {
-    id:   'hint_example',
-    icon: '',
-    label: 'Example Sentence',
-    desc:  'Shows the answer used in an example sentence.',
-    cost:  ACTIVE_COSTS.hint_example,
+    id:      'hint_example',
+    label:   'Example Sentence',
+    desc:    'Shows the answer used in an example sentence.',
+    cost:    ACTIVE_COSTS.hint_example,
     metaKey: 'example',
   },
   {
     id:   'reveal_vowels',
-    icon: '',
     label: 'Reveal Vowels',
     desc:  'For words 8+ letters, reveals all vowel positions.',
     cost:  ACTIVE_COSTS.reveal_vowels,
   },
   {
     id:   'skip_word',
-    icon: '',
     label: 'Skip Word',
     desc:  'Skips one clue and marks it as solved.',
     cost:  ACTIVE_COSTS.skip_word,
@@ -88,15 +93,16 @@ const ACTIVES = [
 
 export default function UpgradeShop({
   onClose,
+  onApplyPermanent,   // async (type: string) => void — calls API, updates store via setRun
   onHint,
   onSkipWord,
   onRevealVowels,
-  onLexicalHint,    // (type, value) => void
-  activeWord,       // the currently selected word in the grid
-  runId,
+  onLexicalHint,
+  activeWord,
 }) {
-  const { run, permanents, upgrades, applyPermanent, buyActive } = useGameStore();
-  const [feedback, setFeedback] = useState(null); // { msg, ok }
+  const { run, permanents, buyActive } = useGameStore();
+  const [feedback,   setFeedback]   = useState(null);
+  const [permLoading, setPermLoading] = useState(false);
 
   const coins = run?.coins ?? 0;
 
@@ -107,16 +113,20 @@ export default function UpgradeShop({
 
   // ── Permanent purchase ─────────────────────────────────────
 
-  function handlePermanent(upgrade) {
-    if (coins < upgrade.cost) return;
-    if (upgrade.oneTime && permanents[upgrade.id]) return;
-    applyPermanent(upgrade.id);
-    showFeedback(`${upgrade.label} activated!`);
-  }
+  async function handlePermanent(upgrade) {
+    if (permLoading)               return;
+    if (coins < upgrade.cost)      return;
+    if (upgrade.atMax(permanents)) return;
 
-  function isPermanentOwned(upgrade) {
-    if (!upgrade.oneTime) return false;
-    return !!permanents[upgrade.id];
+    setPermLoading(true);
+    try {
+      await onApplyPermanent(upgrade.id);
+      showFeedback(`${upgrade.label} activated!`);
+    } catch (err) {
+      showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
+    } finally {
+      setPermLoading(false);
+    }
   }
 
   // ── Active purchase ────────────────────────────────────────
@@ -127,7 +137,6 @@ export default function UpgradeShop({
       return;
     }
 
-    // Vowel reveal — only works on 8+ letter words
     if (upgrade.id === 'reveal_vowels') {
       if (!activeWord || activeWord.answer.length < 8) {
         showFeedback('Select a word with 8+ letters first.', false);
@@ -139,26 +148,22 @@ export default function UpgradeShop({
       return;
     }
 
-    // Lexical hints — read directly from activeWord.meta
     if (upgrade.metaKey) {
       if (!activeWord) {
         showFeedback('Select a clue first.', false);
         return;
       }
-
       const value = activeWord.meta?.[upgrade.metaKey];
       if (!value || (typeof value === 'string' && !value.trim())) {
         showFeedback(`No ${upgrade.label.toLowerCase()} available for this word.`, false);
         return;
       }
-
       buyActive(upgrade.id, upgrade.cost);
       onLexicalHint?.(upgrade.id, value, activeWord.answer);
       onClose();
       return;
     }
 
-    // hint / skip_word
     buyActive(upgrade.id, upgrade.cost);
     if (upgrade.id === 'hint')      onHint?.();
     if (upgrade.id === 'skip_word') onSkipWord?.();
@@ -177,7 +182,8 @@ export default function UpgradeShop({
       }}
     >
       <div className="bg-white border-4 border-black rounded-2xl p-6
-                      w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+                      w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto
+                      shadow-[8px_8px_0px_rgba(0,0,0,1)]">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-1">
@@ -193,13 +199,16 @@ export default function UpgradeShop({
         {/* Feedback banner */}
         {feedback && (
           <div className={`mb-4 px-3 py-2 rounded-lg text-xs font-pixel border-2
-            ${feedback.ok ? 'bg-black text-white border-black' : 'bg-gray-100 text-black border-black'}`}>
+            ${feedback.ok
+              ? 'bg-black text-white border-black'
+              : 'bg-gray-100 text-black border-black'}`}>
             {feedback.msg}
           </div>
         )}
 
         {/* Permanent upgrades */}
-        <h3 className="font-pixel text-black font-bold text-xs mb-2 mt-2 border-b-2 border-gray-200 pb-1">
+        <h3 className="font-pixel text-black font-bold text-xs mb-2 mt-2
+                       border-b-2 border-gray-200 pb-1">
           Permanent
         </h3>
         <p className="text-gray-600 text-xs mb-3">
@@ -207,9 +216,10 @@ export default function UpgradeShop({
         </p>
         <div className="grid grid-cols-1 gap-2 mb-5">
           {PERMANENTS.map(u => {
-            const owned     = isPermanentOwned(u);
+            const maxed     = u.atMax(permanents);
             const canAfford = coins >= u.cost;
-            const disabled  = owned || !canAfford;
+            const disabled  = maxed || !canAfford || permLoading;
+            const progress  = u.progress(permanents);
 
             return (
               <button
@@ -217,21 +227,33 @@ export default function UpgradeShop({
                 onClick={() => !disabled && handlePermanent(u)}
                 disabled={disabled}
                 className={`flex items-start gap-3 p-3 rounded-xl text-left border-2 transition-all
-                  ${owned
+                  ${maxed
                     ? 'border-gray-200 bg-gray-100 opacity-60 cursor-default'
-                    : canAfford
+                    : canAfford && !permLoading
                     ? 'border-gray-300 bg-white hover:border-black hover:bg-yellow-50 cursor-pointer'
                     : 'border-gray-100 bg-white opacity-50 cursor-not-allowed'}`}
               >
-                <span className="font-pixel text-xl text-black mt-0.5">{u.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-bold ${owned ? 'text-gray-500 line-through' : 'text-black'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-xs font-bold ${maxed ? 'text-gray-500' : 'text-black'}`}>
                       {u.label}
                     </span>
-                    <span className="text-black font-bold text-xs font-pixel ml-2 shrink-0">
-                      {owned ? 'OWNED' : `${u.cost}c`}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Progress / max indicator */}
+                      {progress && (
+                        <span className="text-gray-400 text-xs font-pixel">
+                          {maxed ? 'MAX' : progress}
+                        </span>
+                      )}
+                      {!progress && maxed && (
+                        <span className="text-gray-400 text-xs font-pixel">OWNED</span>
+                      )}
+                      {!maxed && (
+                        <span className="text-black font-bold text-xs font-pixel">
+                          {u.cost}c
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-gray-600 text-xs mt-0.5 leading-relaxed">{u.desc}</p>
                 </div>
@@ -241,7 +263,8 @@ export default function UpgradeShop({
         </div>
 
         {/* Active upgrades */}
-        <h3 className="font-pixel text-black font-bold text-xs mb-2 border-b-2 border-gray-200 pb-1">
+        <h3 className="font-pixel text-black font-bold text-xs mb-2
+                       border-b-2 border-gray-200 pb-1">
           Active
         </h3>
         <p className="text-gray-600 text-xs mb-3">
@@ -249,16 +272,12 @@ export default function UpgradeShop({
         </p>
         <div className="grid grid-cols-1 gap-2 mb-5">
           {ACTIVES.map(u => {
-            const canAfford = coins >= u.cost;
-
+            const canAfford  = coins >= u.cost;
             const vowelLocked = u.id === 'reveal_vowels'
               && (!activeWord || activeWord.answer.length < 8);
-
-            // Lexical hints: need an active word AND the meta field must exist
-            const lexLocked = u.metaKey
+            const lexLocked   = u.metaKey
               && (!activeWord || !activeWord.meta?.[u.metaKey]);
-
-            const softLocked = vowelLocked || lexLocked;
+            const softLocked  = vowelLocked || lexLocked;
 
             return (
               <button
@@ -270,9 +289,6 @@ export default function UpgradeShop({
                     ? 'border-gray-100 bg-white opacity-50 cursor-not-allowed'
                     : 'border-gray-300 bg-white hover:border-black hover:bg-yellow-50 cursor-pointer'}`}
               >
-                <span className="font-pixel text-lg text-black mt-0.5 text-center font-bold">
-                  {u.icon}
-                </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="text-black text-xs font-bold">{u.label}</span>
