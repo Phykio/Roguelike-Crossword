@@ -10,7 +10,7 @@ import {
 export const PERMANENT_COSTS = {
   extra_time:      50,
   extra_heart:     100,
-  bonus_time_long: 100,
+  bonus_time_long: 80,
 };
 
 export const ACTIVE_COSTS = {
@@ -23,16 +23,14 @@ export const ACTIVE_COSTS = {
   hint_example:    20,
 };
 
-// Limits — kept in sync with the server's PERMANENT_RULES
 export const PERMANENT_LIMITS = {
-  extra_heart:     4,    // max extra hearts (1 base + 4 extra = 5 total)
-  extra_time:      300,  // max extra seconds (10 minutes)
-  bonus_time_long: 1,    // one-time purchase
+  extra_heart:     4,
+  extra_time:      300,
+  bonus_time_long: 1,
 };
 
 const DEFAULT_TIMER = 300;
 
-// Derive the client permanents object from a run row returned by the API.
 function derivePermanents(run) {
   if (!run) return {};
   return {
@@ -45,7 +43,6 @@ function derivePermanents(run) {
 function getInitialState() {
   const g        = loadGameState();
   const savedRun = loadRunState();
-  // Prefer run-derived permanents (DB source of truth) over cached game state
   const permanents = savedRun ? derivePermanents(savedRun) : (g?.permanents ?? {});
   return {
     permanents,
@@ -68,8 +65,6 @@ export const useGameStore = create((set, get) => ({
   ...getInitialState(),
 
   // ── Run ──────────────────────────────────────────────────────
-  // Always re-derives permanents from the updated run so the client
-  // stays in sync with whatever the server returned.
   setRun(run) {
     const permanents = derivePermanents(run);
     set({ run, permanents });
@@ -87,6 +82,8 @@ export const useGameStore = create((set, get) => ({
     });
   },
 
+  // addCoins is used for word-solve rewards (local only until level-complete syncs to DB).
+  // Coin *spending* goes through the API and back via setRun — do not deduct locally.
   addCoins(amt) {
     set(s => {
       const run = { ...s.run, coins: (s.run?.coins ?? 0) + amt };
@@ -129,6 +126,7 @@ export const useGameStore = create((set, get) => ({
   },
 
   // ── Hints ────────────────────────────────────────────────────
+  // addHints is called locally after a successful API purchase of 'hint'.
   addHints(n) {
     set(s => {
       const hintsRemaining = s.hintsRemaining + n;
@@ -142,20 +140,6 @@ export const useGameStore = create((set, get) => ({
       const hintsRemaining = Math.max(0, s.hintsRemaining - 1);
       persist({ ...s, hintsRemaining });
       return { hintsRemaining };
-    });
-  },
-
-  // ── Active upgrades ───────────────────────────────────────────
-  // Permanent upgrades are now applied server-side (POST /api/run/:id/permanent).
-  // The API response is passed to setRun(), which re-derives permanents automatically.
-  buyActive(type, cost) {
-    set(s => {
-      if ((s.run?.coins ?? 0) < cost) return {};
-      const run = { ...s.run, coins: (s.run?.coins ?? 0) - cost };
-      const hintsRemaining = type === 'hint' ? s.hintsRemaining + 1 : s.hintsRemaining;
-      saveRunState(run);
-      persist({ ...s, run, hintsRemaining });
-      return { run, hintsRemaining };
     });
   },
 

@@ -3,7 +3,6 @@ import PixelCell from './PixelCell.jsx';
 
 const TILE_SIZE = 40;
 
-// ── Meta field definitions ─────────────────────────────────────
 const META_FIELDS = [
   { key: 'pos',        label: 'POS', title: 'Part of Speech' },
   { key: 'definition', label: 'DEF', title: 'Definition'     },
@@ -25,27 +24,16 @@ function getSynonymList(synonym) {
   return synonym.split(',').map(s => s.trim()).filter(Boolean);
 }
 
-// ── Single badge — display-only, no click ─────────────────────
-
 function MetaBadge({ field }) {
   return (
     <span
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        height: 17,
-        padding: '0 5px',
-        borderRadius: 3,
-        background: 'transparent',
-        border: '1.5px solid #bbb',
-        color: '#888',
-        fontSize: 8,
-        fontWeight: 800,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        lineHeight: 1,
-        fontFamily: 'inherit',
-        userSelect: 'none',
+        display: 'inline-flex', alignItems: 'center',
+        height: 17, padding: '0 5px', borderRadius: 3,
+        background: 'transparent', border: '1.5px solid #bbb',
+        color: '#888', fontSize: 8, fontWeight: 800,
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+        lineHeight: 1, fontFamily: 'inherit', userSelect: 'none',
       }}
     >
       {field.label}
@@ -53,101 +41,67 @@ function MetaBadge({ field }) {
   );
 }
 
-// ── Lexical hint panel shown below active-clue banner ─────────
-
 function LexicalHintPanel({ hint, onDismiss }) {
   if (!hint) return null;
 
   const labelMap = {
-    hint_pos: 'Part of Speech',
-    hint_synonym: 'Synonym',
+    hint_pos:        'Part of Speech',
+    hint_synonym:    'Synonym',
     hint_definition: 'Definition',
-    hint_example: 'Example',
+    hint_example:    'Example',
   };
 
   const POS_MAP = {
-    'n': 'Noun',
-    'v': 'Verb',
-    'adj': 'Adjective',
-    'a': 'Adjective',
-    'adv': 'Adverb',
-    'r': 'Adverb',
-    'prep': 'Preposition',
-    'conj': 'Conjunction',
-    'pron': 'Pronoun',
-    'interj': 'Interjection'
+    n: 'Noun', v: 'Verb', adj: 'Adjective', a: 'Adjective',
+    adv: 'Adverb', r: 'Adverb', prep: 'Preposition',
+    conj: 'Conjunction', pron: 'Pronoun', interj: 'Interjection',
   };
 
   const renderBody = () => {
     if (hint.type === 'hint_pos') {
-      const rawValue = hint.value?.toLowerCase()?.trim() || '';
-      const displayValue = POS_MAP[rawValue] || hint.value;
+      const raw = hint.value?.toLowerCase()?.trim() || '';
       return (
         <span style={{ fontSize: 11, textTransform: 'uppercase' }}>
-          {displayValue}
+          {POS_MAP[raw] || hint.value}
         </span>
       );
     }
     if (hint.type === 'hint_synonym') {
-      const list = getSynonymList(hint.value);
       return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-          {list.slice(0, 7).map((s, i) => (
-            <span key={i} style={{ textTransform: 'capitalize', fontSize: 11 }}>
-              {s}
-            </span>
+          {getSynonymList(hint.value).slice(0, 7).map((s, i) => (
+            <span key={i} style={{ textTransform: 'capitalize', fontSize: 11 }}>{s}</span>
           ))}
         </div>
       );
     }
     if (hint.type === 'hint_example') {
-      let display = hint.value;
-      if (hint.answer) {
-        const blanks = '_'.repeat(hint.answer.length);
-        display = display.replace(new RegExp(hint.answer, 'gi'), blanks);
-      }
-      return (
-        <p style={{ fontStyle: 'italic', fontSize: 11, margin: 0 }}>
-          "{display}"
-        </p>
-      );
+      const display = hint.answer
+        ? hint.value.replace(new RegExp(hint.answer, 'gi'), '_'.repeat(hint.answer.length))
+        : hint.value;
+      return <p style={{ fontStyle: 'italic', fontSize: 11, margin: 0 }}>"{display}"</p>;
     }
-    // definition
-    return (
-      <p style={{ fontSize: 11, margin: 0 }}>
-        {hint.value}
-      </p>
-    );
+    return <p style={{ fontSize: 11, margin: 0 }}>{hint.value}</p>;
   };
 
   return (
     <div style={{ width: '100%', marginTop: 6 }}>
-      {/* caret pointing up toward the clue */}
       <div style={{
-        width: 0, height: 0,
-        margin: '0 auto',
-        borderLeft: '5px solid transparent',
-        borderRight: '5px solid transparent',
+        width: 0, height: 0, margin: '0 auto',
+        borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
         borderBottom: '6px solid #e5e7eb',
       }} />
-    
-      {/* Main hint box */}
       <div style={{
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-        padding: '8px 12px',
-        display: 'flex',
-        alignItems: 'center', /* CHANGED to center */
-        justifyContent: 'space-between',
-        gap: 10,
+        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+        padding: '8px 12px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', gap: 10,
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}> {/* CHANGED to center */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{
             fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
             textTransform: 'uppercase', color: '#888',
-            fontFamily: 'inherit', whiteSpace: 'nowrap'
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
           }}>
             {labelMap[hint.type] ?? hint.type}:
           </span>
@@ -168,8 +122,6 @@ function LexicalHintPanel({ hint, onDismiss }) {
   );
 }
 
-// ── Clue list item ─────────────────────────────────────────────
-
 function ClueItem({ word, solved, active, onClick }) {
   const hasAnyMeta = META_FIELDS.some(f => fieldHasValue(word.meta, f.key));
   return (
@@ -180,8 +132,8 @@ function ClueItem({ word, solved, active, onClick }) {
         solved
           ? 'line-through text-gray-400 cursor-default'
           : active
-            ? 'text-gray-500 bg-yellow-50 cursor-pointer'
-            : 'text-black hover:bg-gray-100 cursor-pointer',
+          ? 'text-gray-500 bg-yellow-50 cursor-pointer'
+          : 'text-black hover:bg-gray-100 cursor-pointer',
       ].join(' ')}
     >
       <span className={`w-8 shrink-0 text-left font-bold ${solved ? 'text-gray-400' : 'text-black'}`}>
@@ -199,47 +151,39 @@ function ClueItem({ word, solved, active, onClick }) {
   );
 }
 
-// ═════════════════════════════════════════════════════════════
-// Main component
-// ═════════════════════════════════════════════════════════════
-
 export default function CrosswordGrid({
   puzzle,
   revealedCells        = new Set(),
   onWordSolved         = () => {},
   onSolvedCountChange  = () => {},
-  onActiveWordChange = () => { },
-  onUserAnswersChange  = () => {},   
+  onActiveWordChange   = () => {},
+  onUserAnswersChange  = () => {},
   initialUserAnswers   = null,
   lexicalHint          = null,
   onDismissLexicalHint = () => {},
 }) {
-  const [userGrid, setUserGrid] = useState(() => {
-    if (initialUserAnswers) return initialUserAnswers;
-    return puzzle.grid.map(row => row.map(cell => (cell === null ? null : '')));
-  });
+  const [userGrid, setUserGrid] = useState(() =>
+    initialUserAnswers ?? puzzle.grid.map(row => row.map(cell => (cell === null ? null : '')))
+  );
   const [selectedCell, setSelectedCell] = useState(null);
   const [direction,    setDirection]    = useState('across');
   const [solvedWords,  setSolvedWords]  = useState(new Set());
+
   const solvedWordsRef = useRef(new Set());
   const inputRefs      = useRef({});
 
   const wordKey    = w => `${w.number}-${w.direction}`;
   const totalWords = puzzle.words.length;
 
-  // ── Word lookup ──────────────────────────────────────────────
-
   function getAcrossWord(row, col) {
     return puzzle.words.find(w =>
-      w.direction === 'across' && w.row === row &&
-      col >= w.col && col < w.col + w.answer.length
+      w.direction === 'across' && w.row === row && col >= w.col && col < w.col + w.answer.length
     );
   }
 
   function getDownWord(row, col) {
     return puzzle.words.find(w =>
-      w.direction === 'down' && w.col === col &&
-      row >= w.row && row < w.row + w.answer.length
+      w.direction === 'down' && w.col === col && row >= w.row && row < w.row + w.answer.length
     );
   }
 
@@ -260,15 +204,10 @@ export default function CrosswordGrid({
     return cells;
   }
 
-  // ── Per-cell solved helpers ──────────────────────────────────
-
   function isCellInAnySolvedWord(row, col) {
     const a = getAcrossWord(row, col);
     const d = getDownWord(row, col);
-    return (
-      (a && solvedWords.has(wordKey(a))) ||
-      (d && solvedWords.has(wordKey(d)))
-    );
+    return (a && solvedWords.has(wordKey(a))) || (d && solvedWords.has(wordKey(d)));
   }
 
   function isCurrentDirectionWordSolved(row, col) {
@@ -280,8 +219,6 @@ export default function CrosswordGrid({
     const words = [getAcrossWord(row, col), getDownWord(row, col)].filter(Boolean);
     return words.length > 0 && words.every(w => solvedWords.has(wordKey(w)));
   }
-
-  // ── Cell visual state ────────────────────────────────────────
 
   const activeWord      = getActiveWord();
   const activeWordCells = getWordCells(activeWord);
@@ -298,8 +235,6 @@ export default function CrosswordGrid({
     return 'empty';
   }
 
-  // ── Navigation helpers ───────────────────────────────────────
-
   function getNextCell(row, col, dir) {
     if (dir === 'across') { for (let c = col + 1; c < puzzle.size; c++) if (puzzle.grid[row][c] !== null) return { row, col: c }; }
     else                  { for (let r = row + 1; r < puzzle.size; r++) if (puzzle.grid[r][col] !== null) return { row: r, col }; }
@@ -307,8 +242,8 @@ export default function CrosswordGrid({
   }
 
   function getPrevCell(row, col, dir) {
-    if (dir === 'across') { for (let c = col - 1; c >= 0; c--)         if (puzzle.grid[row][c] !== null) return { row, col: c }; }
-    else                  { for (let r = row - 1; r >= 0; r--)         if (puzzle.grid[r][col] !== null) return { row: r, col }; }
+    if (dir === 'across') { for (let c = col - 1; c >= 0; c--)   if (puzzle.grid[row][c] !== null) return { row, col: c }; }
+    else                  { for (let r = row - 1; r >= 0; r--)   if (puzzle.grid[r][col] !== null) return { row: r, col }; }
     return null;
   }
 
@@ -317,8 +252,6 @@ export default function CrosswordGrid({
     setSelectedCell(cell);
     setTimeout(() => { inputRefs.current[`${cell.row}-${cell.col}`]?.focus(); }, 0);
   }
-
-  // ── Click handlers ───────────────────────────────────────────
 
   function handleClueClick(word) {
     setDirection(word.direction);
@@ -333,13 +266,11 @@ export default function CrosswordGrid({
       if (hasAcross && hasDown) setDirection(d => d === 'across' ? 'down' : 'across');
     } else {
       setSelectedCell({ row, col });
-      if (hasAcross) setDirection('across');
-      else if (hasDown) setDirection('down');
+      if (hasAcross)      setDirection('across');
+      else if (hasDown)   setDirection('down');
     }
     inputRefs.current[`${row}-${col}`]?.focus();
   }
-
-  // ── Keyboard ─────────────────────────────────────────────────
 
   function handleKeyDown(row, col, e) {
     if (e.key === 'ArrowRight') { e.preventDefault(); setDirection('across'); moveTo(getNextCell(row, col, 'across') ?? { row, col }); return; }
@@ -363,8 +294,6 @@ export default function CrosswordGrid({
     }
   }
 
-  // ── Word check ───────────────────────────────────────────────
-
   const checkWords = useCallback((grid) => {
     const newlySolved = [];
     for (const word of puzzle.words) {
@@ -372,8 +301,8 @@ export default function CrosswordGrid({
       if (solvedWordsRef.current.has(key)) continue;
       const letters = [];
       for (let i = 0; i < word.answer.length; i++) {
-        const r = word.direction === 'across' ? word.row     : word.row + i;
-        const c = word.direction === 'across' ? word.col + i : word.col;
+        const r      = word.direction === 'across' ? word.row     : word.row + i;
+        const c      = word.direction === 'across' ? word.col + i : word.col;
         const cellKey = `${r}-${c}`;
         letters.push(revealedCells.has(cellKey) ? puzzle.grid[r][c] : (grid[r]?.[c] ?? ''));
       }
@@ -381,16 +310,13 @@ export default function CrosswordGrid({
     }
     if (newlySolved.length > 0) {
       for (const w of newlySolved) solvedWordsRef.current.add(wordKey(w));
-      const newCount = solvedWordsRef.current.size;
       setSolvedWords(prev => { const next = new Set(prev); for (const w of newlySolved) next.add(wordKey(w)); return next; });
       for (const w of newlySolved) onWordSolved(w);
-      onSolvedCountChange(newCount, totalWords);
+      onSolvedCountChange(solvedWordsRef.current.size, totalWords);
     }
   }, [puzzle.words, puzzle.grid, onWordSolved, onSolvedCountChange, totalWords, revealedCells]); // eslint-disable-line
 
   useEffect(() => { checkWords(userGrid); }, [revealedCells, userGrid, checkWords]);
-
-  // ── Input change ─────────────────────────────────────────────
 
   function handleChange(row, col, e) {
     const key = `${row}-${col}`;
@@ -419,8 +345,6 @@ export default function CrosswordGrid({
     }
   }
 
-  // ── Derived data ─────────────────────────────────────────────
-
   const numMap = {};
   puzzle.words.forEach(w => {
     const key = `${w.row}-${w.col}`;
@@ -431,24 +355,17 @@ export default function CrosswordGrid({
   const acrossWords = [...puzzle.words].filter(w => w.direction === 'across').sort((a, b) => a.number - b.number);
   const downWords   = [...puzzle.words].filter(w => w.direction === 'down').sort((a, b) => a.number - b.number);
 
-  // ── Render ───────────────────────────────────────────────────
-
   return (
     <div className="flex flex-col items-center gap-4 w-full">
 
-      {/* ── Active-clue banner ── */}
       {activeWord && (
         <div className="max-w-md w-full text-center px-4 flex flex-col items-center">
-
-          {/* Clue number + text */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 4 }}>
             <span className="text-black font-bold font-pixel text-xs">
               {activeWord.number} {activeWord.direction === 'across' ? 'Across' : 'Down'}
             </span>
             <span className="text-gray-600 text-xs">{activeWord.clue}</span>
           </div>
-
-          {/* Meta badge row — display-only, no interaction */}
           {activeWord.meta && META_FIELDS.some(f => fieldHasValue(activeWord.meta, f.key)) && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 5 }}>
               {META_FIELDS.filter(f => fieldHasValue(activeWord.meta, f.key)).map(field => (
@@ -456,20 +373,16 @@ export default function CrosswordGrid({
               ))}
             </div>
           )}
-
-          {/* Lexical hint panel — drops down directly below the clue banner */}
           <LexicalHintPanel hint={lexicalHint} onDismiss={onDismissLexicalHint} />
         </div>
       )}
 
-      {/* Fallback: lexical hint with no active word selected */}
       {!activeWord && lexicalHint && (
         <div className="max-w-md w-full px-4">
           <LexicalHintPanel hint={lexicalHint} onDismiss={onDismissLexicalHint} />
         </div>
       )}
 
-      {/* ── Grid ── */}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${puzzle.size}, ${TILE_SIZE}px)`, gap: 2 }}>
         {puzzle.grid.map((row, ri) =>
           row.map((cell, ci) => {
@@ -493,7 +406,6 @@ export default function CrosswordGrid({
         )}
       </div>
 
-      {/* ── Clue lists ── */}
       <div className="grid grid-cols-2 gap-8 w-full max-w-2xl px-4 mt-2">
         <div>
           <h3 className="font-pixel font-bold text-black text-sm mb-3 text-center w-full">Across</h3>
@@ -508,7 +420,6 @@ export default function CrosswordGrid({
           ))}
         </div>
       </div>
-
     </div>
   );
 }

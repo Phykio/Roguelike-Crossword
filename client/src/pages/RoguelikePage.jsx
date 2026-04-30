@@ -27,7 +27,7 @@ export default function RoguelikePage() {
     addScore, addCoins, advanceLevel,
     loseHeart,
     permanents,
-    hintsRemaining, useHint,
+    hintsRemaining, useHint, addHints,
     addTime,
     resetRun, resetPuzzleState,
     setTimer,
@@ -220,13 +220,21 @@ export default function RoguelikePage() {
     }
   }
 
-  // ── Permanent upgrades (API-backed) ───────────────────────────
-  // Called by UpgradeShop. Makes the server call, then syncs the store
-  // via setRun (which re-derives permanents from the returned run row).
+  // ── Permanent upgrades ─────────────────────────────────────────
 
   async function handleApplyPermanent(type) {
     const { data } = await api.post(`/api/run/${run.id}/permanent`, { type });
-    setRun(data); // re-derives permanents + updates coins/hearts automatically
+    setRun(data);
+  }
+
+  // ── Active upgrades ────────────────────────────────────────────
+  // Deducts coins on the server first; local state derives from the response.
+  // The 'hint' type also increments the local hint counter after a confirmed purchase.
+
+  async function handleBuyActive(type, cost) {
+    const { data } = await api.post(`/api/run/${run.id}/active`, { type, cost });
+    setRun(data);
+    if (type === 'hint') addHints(1);
   }
 
   // ── Hints ──────────────────────────────────────────────────────
@@ -562,6 +570,7 @@ export default function RoguelikePage() {
         <UpgradeShop
           onClose={() => setShowShop(false)}
           onApplyPermanent={handleApplyPermanent}
+          onBuyActive={handleBuyActive}
           onHint={handleHint}
           onSkipWord={handleSkipWord}
           onRevealVowels={handleRevealVowels}

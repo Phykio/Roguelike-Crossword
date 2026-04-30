@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useGameStore, PERMANENT_COSTS, ACTIVE_COSTS, PERMANENT_LIMITS } from '../store/gameStore.js';
 
 // ── Permanent upgrade definitions ──────────────────────────────
-// atMax(permanents) → bool  — whether this upgrade is capped
-// progress(permanents) → string — shown in the button when not maxed
 
 const PERMANENTS = [
   {
@@ -42,7 +40,7 @@ const PERMANENTS = [
 
 const ACTIVES = [
   {
-    id:   'hint',
+    id:    'hint',
     label: 'Hint',
     desc:  'Reveals one letter of answer in the selected clue.',
     cost:  ACTIVE_COSTS.hint,
@@ -76,13 +74,13 @@ const ACTIVES = [
     metaKey: 'example',
   },
   {
-    id:   'reveal_vowels',
+    id:    'reveal_vowels',
     label: 'Reveal Vowels',
     desc:  'For words 8+ letters, reveals all vowel positions.',
     cost:  ACTIVE_COSTS.reveal_vowels,
   },
   {
-    id:   'skip_word',
+    id:    'skip_word',
     label: 'Skip Word',
     desc:  'Skips one clue and marks it as solved.',
     cost:  ACTIVE_COSTS.skip_word,
@@ -93,16 +91,18 @@ const ACTIVES = [
 
 export default function UpgradeShop({
   onClose,
-  onApplyPermanent,   // async (type: string) => void — calls API, updates store via setRun
+  onApplyPermanent,   // async (type: string) => void
+  onBuyActive,        // async (type: string, cost: number) => void — hits API, syncs run
   onHint,
   onSkipWord,
   onRevealVowels,
   onLexicalHint,
   activeWord,
 }) {
-  const { run, permanents, buyActive } = useGameStore();
-  const [feedback,   setFeedback]   = useState(null);
+  const { run, permanents } = useGameStore();
+  const [feedback,    setFeedback]    = useState(null);
   const [permLoading, setPermLoading] = useState(false);
+  const [activeLoading, setActiveLoading] = useState(false);
 
   const coins = run?.coins ?? 0;
 
@@ -123,7 +123,6 @@ export default function UpgradeShop({
       await onApplyPermanent(upgrade.id);
       showFeedback(`${upgrade.label} activated!`);
     } catch (err) {
-      console.error("Upgrade Error:", err);
       showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
     } finally {
       setPermLoading(false);
@@ -131,8 +130,13 @@ export default function UpgradeShop({
   }
 
   // ── Active purchase ────────────────────────────────────────
+  // All coin deduction goes through onBuyActive → API → setRun.
+  // Local side-effects (hint reveal, skip, lexical display) only run
+  // after the API call succeeds.
 
-  function handleActive(upgrade) {
+  async function handleActive(upgrade) {
+    if (activeLoading) return;
+
     if (coins < upgrade.cost) {
       showFeedback('Not enough coins.', false);
       return;
@@ -143,9 +147,16 @@ export default function UpgradeShop({
         showFeedback('Select a word with 8+ letters first.', false);
         return;
       }
-      buyActive(upgrade.id, upgrade.cost);
-      onRevealVowels?.(activeWord);
-      showFeedback(`${upgrade.label} used!`);
+      setActiveLoading(true);
+      try {
+        await onBuyActive(upgrade.id, upgrade.cost);
+        onRevealVowels?.(activeWord);
+        showFeedback(`${upgrade.label} used!`);
+      } catch (err) {
+        showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
+      } finally {
+        setActiveLoading(false);
+      }
       return;
     }
 
@@ -159,16 +170,33 @@ export default function UpgradeShop({
         showFeedback(`No ${upgrade.label.toLowerCase()} available for this word.`, false);
         return;
       }
-      buyActive(upgrade.id, upgrade.cost);
-      onLexicalHint?.(upgrade.id, value, activeWord.answer);
-      onClose();
+      setActiveLoading(true);
+      try {
+        await onBuyActive(upgrade.id, upgrade.cost);
+        onLexicalHint?.(upgrade.id, value, activeWord.answer);
+        onClose();
+      } catch (err) {
+        showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
+      } finally {
+        setActiveLoading(false);
+      }
       return;
     }
 
-    buyActive(upgrade.id, upgrade.cost);
-    if (upgrade.id === 'hint')      onHint?.();
-    if (upgrade.id === 'skip_word') onSkipWord?.();
-    showFeedback(`${upgrade.label} used!`);
+    // hint / skip_word
+    setActiveLoading(true);
+    try {
+      await onBuyActive(upgrade.id, upgrade.cost);
+      // Side-effects: hint counter is incremented inside handleBuyActive (RoguelikePage),
+      // so just trigger the action here.
+      if (upgrade.id === 'hint')      onHint?.();
+      if (upgrade.id === 'skip_word') onSkipWord?.();
+      showFeedback(`${upgrade.label} used!`);
+    } catch (err) {
+      showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
+    } finally {
+      setActiveLoading(false);
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────
@@ -240,7 +268,6 @@ export default function UpgradeShop({
                       {u.label}
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Progress / max indicator */}
                       {progress && (
                         <span className="text-gray-400 text-xs font-pixel">
                           {maxed ? 'MAX' : progress}
@@ -273,7 +300,7 @@ export default function UpgradeShop({
         </p>
         <div className="grid grid-cols-1 gap-2 mb-5">
           {ACTIVES.map(u => {
-            const canAfford  = coins >= u.cost;
+            const canAfford   = coins >= u.cost;
             const vowelLocked = u.id === 'reveal_vowels'
               && (!activeWord || activeWord.answer.length < 8);
             const lexLocked   = u.metaKey
@@ -283,10 +310,10 @@ export default function UpgradeShop({
             return (
               <button
                 key={u.id}
-                onClick={() => canAfford && !softLocked && handleActive(u)}
-                disabled={!canAfford || softLocked}
+                onClick={() => !activeLoading && canAfford && !softLocked && handleActive(u)}
+                disabled={!canAfford || softLocked || activeLoading}
                 className={`flex items-start gap-3 p-3 rounded-xl text-left border-2 transition-all
-                  ${!canAfford || softLocked
+                  ${!canAfford || softLocked || activeLoading
                     ? 'border-gray-100 bg-white opacity-50 cursor-not-allowed'
                     : 'border-gray-300 bg-white hover:border-black hover:bg-yellow-50 cursor-pointer'}`}
               >
