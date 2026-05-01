@@ -108,7 +108,7 @@ export default function ClassicPage() {
 
         {loading && (
           <p className="text-black text-[10px] font-pixel text-center animate-pulse mt-4">
-            {size >= 11 ? 'Large grids take 15–30 seconds…' : 'Generating your puzzle…'}
+            {size >= 11 ? 'Generating your puzzle…' : 'Generating your puzzle…'}
           </p>
         )}
       </div>
@@ -159,7 +159,7 @@ export default function ClassicPage() {
       {complete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
           <div className="bg-white border-4 border-black rounded-2xl p-10 text-center shadow-[8px_8px_0px_rgba(0,0,0,1)] mx-4">
-            <div className="text-4xl mb-4">🏆</div>
+            <div className="text-4xl mb-4"></div>
             <p className="font-pixel text-black font-bold text-lg mb-2">Puzzle Complete!</p>
             <div className="flex flex-col gap-3 mt-6">
               <button
