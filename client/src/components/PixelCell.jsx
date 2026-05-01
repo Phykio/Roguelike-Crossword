@@ -2,22 +2,14 @@
 const HAS_SPRITES = true;
 const TILE_SIZE = 40;
 
-import sandEmpty from '../assets/tiles/sand_empty.png';
-import sandCursor from '../assets/tiles/sand_cursor.png';
-import waterLoop from '../assets/water_loop.gif';
-import sandBlock1 from '../assets/tiles/sand_block1.gif';
-import sandBlock2 from '../assets/tiles/sand_block2.gif';
-import sandBlock3 from '../assets/tiles/sand_block3.gif';
-
-const WATER_TILE_URL = waterLoop;
-
-const SAND_TILE_URL = sandEmpty;
-const CURSOR_TILE_URL = sandCursor;
+const WATER_TILE_URL = "/tiles/water_loop.gif";
+const SAND_TILE_URL = "/tiles/sand_empty.png";
+const CURSOR_TILE_URL = "/tiles/sand_cursor.png";
 
 const BLOCK_TILE_URLS = [
-  sandBlock1,
-  sandBlock2,
-  sandBlock3,
+  "/tiles/sand_block1.gif",
+  "/tiles/sand_block2.gif",
+  "/tiles/sand_block3.gif",
 ];
 
 const FALLBACK_CLASS = {
