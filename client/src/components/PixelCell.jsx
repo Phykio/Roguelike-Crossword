@@ -2,15 +2,22 @@
 const HAS_SPRITES = true;
 const TILE_SIZE = 40;
 
-const WATER_TILE_URL = '/tiles/water_loop.gif';
+import sandEmpty from '../assets/tiles/sand_empty.png';
+import sandCursor from '../assets/tiles/sand_cursor.png';
+import waterLoop from '../assets/water_loop.gif';
+import sandBlock1 from '../assets/tiles/sand_block1.gif';
+import sandBlock2 from '../assets/tiles/sand_block2.gif';
+import sandBlock3 from '../assets/tiles/sand_block3.gif';
 
-const SAND_TILE_URL = '/tiles/sand_empty.png';
-const CURSOR_TILE_URL = '/tiles/sand_cursor.png';
+const WATER_TILE_URL = waterLoop;
+
+const SAND_TILE_URL = sandEmpty;
+const CURSOR_TILE_URL = sandCursor;
 
 const BLOCK_TILE_URLS = [
-  '/tiles/sand_block.gif',
-  '/tiles/sand_block_2.gif',
-  '/tiles/sand_block_3.gif',
+  sandBlock1,
+  sandBlock2,
+  sandBlock3,
 ];
 
 const FALLBACK_CLASS = {
@@ -99,7 +106,7 @@ export default function PixelCell({
       style={{ width: TILE_SIZE, height: TILE_SIZE, ...spriteStyle }}
       onClick={onClick}
     >
-      {(state === 'focused' || state === 'cursor' || state === 'correct') && (
+      {(state === 'correct') && (
         <EdgeOverlay edges={edges} color={borderColor} />
       )}
 
