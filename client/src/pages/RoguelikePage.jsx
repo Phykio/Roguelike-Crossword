@@ -42,6 +42,7 @@ export default function RoguelikePage() {
   const [gameover,       setGameover]       = useState(false);
   const [victory,        setVictory]        = useState(false);
   const [activeWord,     setActiveWord]     = useState(null);
+  const [selectedCell,   setSelectedCell]   = useState(null);
   const [lexicalHint,    setLexicalHint]    = useState(null);
   const [userAnswers,    setUserAnswers]    = useState(null);
 
@@ -266,24 +267,23 @@ export default function RoguelikePage() {
 
   function handleHint() {
     if (hintsRemaining <= 0 || !puzzle) return;
-    const unsolved = puzzle.words.filter(
-      w => !scoredWordsRef.current.has(`${w.number}-${w.direction}`)
-    );
-    if (!unsolved.length) return;
-    const target = unsolved[0];
-    for (let i = 0; i < target.answer.length; i++) {
-      const r   = target.direction === 'across' ? target.row     : target.row + i;
-      const c   = target.direction === 'across' ? target.col + i : target.col;
-      const key = `${r}-${c}`;
-      if (!revealedCells.has(key)) {
-        const next = new Set(revealedCells);
-        next.add(key);
-        setRevealedCells(next);
-        useHint();
-        savePuzzle({ revealedCells: next });
-        break;
-      }
+    if (!selectedCell) {
+      setLexicalHint({ type: 'hint_warning', value: 'Select a cell first to use a hint.' });
+      return;
     }
+
+    const key = `${selectedCell.row}-${selectedCell.col}`;
+    if (revealedCells.has(key) || revealedVowels.has(key)) {
+      setLexicalHint({ type: 'hint_warning', value: 'That cell is already revealed.' });
+      return;
+    }
+
+    const next = new Set(revealedCells);
+    next.add(key);
+    setRevealedCells(next);
+    useHint();
+    setLexicalHint(null);
+    savePuzzle({ revealedCells: next });
   }
 
   function handleRevealVowels(word) {
@@ -304,14 +304,16 @@ export default function RoguelikePage() {
   const allRevealedCells = new Set([...revealedCells, ...revealedVowels]);
 
   function handleSkipWord() {
-    const first = puzzle?.words.find(
+    const unsolvedWords = puzzle?.words.filter(
       w => !scoredWordsRef.current.has(`${w.number}-${w.direction}`)
     );
-    if (!first) return;
+    if (!unsolvedWords?.length) return;
+    const randomIndex = Math.floor(Math.random() * unsolvedWords.length);
+    const picked = unsolvedWords[randomIndex];
     const next = new Set(revealedCells);
-    for (let i = 0; i < first.answer.length; i++) {
-      const r = first.direction === 'across' ? first.row     : first.row + i;
-      const c = first.direction === 'across' ? first.col + i : first.col;
+    for (let i = 0; i < picked.answer.length; i++) {
+      const r = picked.direction === 'across' ? picked.row     : picked.row + i;
+      const c = picked.direction === 'across' ? picked.col + i : picked.col;
       next.add(`${r}-${c}`);
     }
     setRevealedCells(next);
@@ -542,6 +544,7 @@ export default function RoguelikePage() {
             onWordSolved={handleWordSolved}
             onSolvedCountChange={handleSolvedCountChange}
             onActiveWordChange={setActiveWord}
+            onSelectedCellChange={setSelectedCell}
             onUserAnswersChange={handleUserAnswersChange}
             initialUserAnswers={userAnswers}
             lexicalHint={lexicalHint}
@@ -596,7 +599,6 @@ export default function RoguelikePage() {
           onClose={() => setShowShop(false)}
           onApplyPermanent={handleApplyPermanent}
           onBuyActive={handleBuyActive}
-          onHint={handleHint}
           onSkipWord={handleSkipWord}
           onRevealVowels={handleRevealVowels}
           onLexicalHint={(type, value, answer) => setLexicalHint({ type, value, answer })}

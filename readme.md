@@ -1,0 +1,8 @@
+# Infini-Crosswords
+This is a personal project aimed to create an american style crossword puzzle game inspired by NY time's own crossword puzzles. The project features a roguelike mode which features upgrades to help users solve puzzle and add replayability. There's also an original mode with no upgrades to all the classic crossword puzzle enjoyers. The database of clues and answers for this project was from https://xd.saul.pw/data. The project was deployed using netlify, render and neon. https://roguelike-crossword.netlify.app/
+
+# Roguelike Features
+So far the game starts at a 3x3 crossword puzzle to a 15x15. The roguelike mode comes with a heart and timer system. Once the timer runs out, a heart is removed, and when all hearts are gone the run is automatically reset. As for upgrades to ease the challenges of the puzzle and roguelike functions, there are permanent and active upgrades. Permanents are stored throughout runs while actives are not. The first active is hints. You can hold an unlimited number of hints and the cell highlighted will be revealed upon use. For the next four upgrades, you can only use them if there's a dot next to the clues and the popups corresponding the clues show up at the top. As for the last two, one of them gives all the vowels of the highlighted clue, if its length is greater than 8 and the other skips a word.
+
+# Assets 
+All Assets for the sprites in roguelike mode is made by me in Aesprite.

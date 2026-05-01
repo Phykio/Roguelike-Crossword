@@ -42,7 +42,7 @@ const ACTIVES = [
   {
     id:    'hint',
     label: 'Hint',
-    desc:  'Reveals one letter of answer in the selected clue.',
+    desc:  'Adds +1 stored hint. Use hints from the Hint button on a selected cell.',
     cost:  ACTIVE_COSTS.hint,
   },
   {
@@ -82,7 +82,7 @@ const ACTIVES = [
   {
     id:    'skip_word',
     label: 'Skip Word',
-    desc:  'Skips one clue and marks it as solved.',
+    desc:  'Randomly fills one remaining unsolved answer.',
     cost:  ACTIVE_COSTS.skip_word,
   },
 ];
@@ -93,7 +93,6 @@ export default function UpgradeShop({
   onClose,
   onApplyPermanent,   // async (type: string) => void
   onBuyActive,        // async (type: string, cost: number) => void — hits API, syncs run
-  onHint,
   onSkipWord,
   onRevealVowels,
   onLexicalHint,
@@ -187,11 +186,8 @@ export default function UpgradeShop({
     setActiveLoading(true);
     try {
       await onBuyActive(upgrade.id, upgrade.cost);
-      // Side-effects: hint counter is incremented inside handleBuyActive (RoguelikePage),
-      // so just trigger the action here.
-      if (upgrade.id === 'hint')      onHint?.();
       if (upgrade.id === 'skip_word') onSkipWord?.();
-      showFeedback(`${upgrade.label} used!`);
+      showFeedback(upgrade.id === 'hint' ? 'Hint added to inventory.' : `${upgrade.label} used!`);
     } catch (err) {
       showFeedback(err?.response?.data?.error || 'Purchase failed.', false);
     } finally {

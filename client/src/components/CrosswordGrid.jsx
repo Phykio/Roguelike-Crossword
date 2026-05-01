@@ -49,6 +49,7 @@ function LexicalHintPanel({ hint, onDismiss }) {
   if (!hint) return null;
 
   const labelMap = {
+    hint_warning:    'Hint',
     hint_pos:        'Part of Speech',
     hint_synonym:    'Synonym',
     hint_definition: 'Definition',
@@ -161,6 +162,7 @@ export default function CrosswordGrid({
   onWordSolved         = () => {},
   onSolvedCountChange  = () => {},
   onActiveWordChange   = () => {},
+  onSelectedCellChange = () => {},
   onUserAnswersChange  = () => {},
   initialUserAnswers   = null,
   lexicalHint          = null,
@@ -234,6 +236,7 @@ export default function CrosswordGrid({
   const activeKey       = activeWord ? wordKey(activeWord) : null;
 
   useEffect(() => { onActiveWordChange(activeWord); }, [activeWord]); // eslint-disable-line
+  useEffect(() => { onSelectedCellChange(selectedCell); }, [selectedCell]); // eslint-disable-line
 
   function getCellState(row, col) {
     const key = `${row}-${col}`;
@@ -242,6 +245,45 @@ export default function CrosswordGrid({
     if (selectedCell?.row === row && selectedCell?.col === col)     return 'cursor';
     if (activeWordCells.has(key))                                   return 'focused';
     return 'empty';
+  }
+
+  function isPlayableCell(row, col) {
+    return puzzle.grid[row][col] !== null;
+  }
+
+  function getCellEdges(row, col, state) {
+    if (!isPlayableCell(row, col)) {
+      return { top: false, right: false, bottom: false, left: false };
+    }
+
+    // Focused/cursor tiles use active-word geometry borders.
+    if (state === 'focused' || state === 'cursor') {
+      const has = (r, c) => activeWordCells.has(`${r}-${c}`);
+      return {
+        top: !has(row - 1, col),
+        right: !has(row, col + 1),
+        bottom: !has(row + 1, col),
+        left: !has(row, col - 1),
+      };
+    }
+
+    // Correct tiles flatten to sand and only keep outer puzzle boundaries.
+    if (state === 'correct') {
+      return {
+        top: row === 0,
+        right: col === puzzle.size - 1,
+        bottom: row === puzzle.size - 1,
+        left: col === 0,
+      };
+    }
+
+    return { top: false, right: false, bottom: false, left: false };
+  }
+
+  function getBlockVariant(row, col) {
+    // Deterministic pseudo-random variant so blocks do not flicker.
+    const hash = Math.abs((row * 92821) ^ (col * 68917));
+    return hash % 3;
   }
 
   function getNextCell(row, col, dir) {
@@ -407,6 +449,8 @@ export default function CrosswordGrid({
                 state={state}
                 letter={displayLetter}
                 wordNumber={numMap[key] ?? null}
+                edges={getCellEdges(ri, ci, state)}
+                blockVariant={getBlockVariant(ri, ci)}
                 onClick={() => handleCellClick(ri, ci)}
                 onChange={e => handleChange(ri, ci, e)}
                 onKeyDown={e => handleKeyDown(ri, ci, e)}
